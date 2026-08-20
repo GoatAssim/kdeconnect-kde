@@ -39,11 +39,12 @@ private:
     };
 
     void resolveJarvis();
+    QProcessEnvironment jarvisProcessEnvironment() const;
     bool runJarvisOnce(const QStringList &args, QString *stdoutText, QString *stderrText, int timeoutMs = 8000);
     QString configPathFor(const QString &which);
     QString allowedToolsEnv() const;
     void refreshToolCatalog();
-    void sendStatus(const QString &error = {});
+    void sendStatus(const QString &error = QString());
     void sendCommands();
     void sendPacketType(const QString &type, const QVariantMap &extra = {});
     void handleListCommands();
