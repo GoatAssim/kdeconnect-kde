@@ -1,0 +1,22 @@
+{
+    "$schema": "../kdeconnect.schema.json",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "albertvaka@gmail.com",
+                "Name": "Albert Vaca Cintora"
+            }
+        ],
+        "Description": "Let a paired phone use Jarvis on this computer, with per-tool permissions",
+        "EnabledByDefault": false,
+        "Icon": "help-hint",
+        "License": "GPL",
+        "Name": "Allow phone to use Jarvis"
+    },
+    "X-KdeConnect-OutgoingPacketType": [
+        "kdeconnect.jarvis"
+    ],
+    "X-KdeConnect-SupportedPacketType": [
+        "kdeconnect.jarvis.request"
+    ]
+}
