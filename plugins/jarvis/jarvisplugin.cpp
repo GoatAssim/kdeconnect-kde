@@ -195,7 +195,11 @@ void JarvisPlugin::connected()
 {
     resolveJarvis();
     refreshToolCatalog();
-    sendStatus();
+    if (m_invoker.program.isEmpty()) {
+        sendStatus(QStringLiteral("Couldn't find the jarvis CLI. kdeconnectd may not see the same PATH as your terminal. Set JARVIS_BIN to the full command, or install jarvis on PATH."));
+    } else {
+        sendStatus();
+    }
     sendCommands();
     watchCommandsFile();
 }
