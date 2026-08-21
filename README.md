@@ -1,4 +1,5 @@
-# KDE Connect - desktop app
+# KDE Connect - desktop app FORK
+THIS IS A PERSONAL FORK FOR A PERSONAL PROJECT (JARVIS) I AM NOT AFFILIATED/ASSOCIATED WITH THE ORIGINAL DEVELOPERS ALL CREDITS GOES TO THEM
 
 KDE Connect is a multi-platform app that allows your devices to communicate (eg: your phone and your computer).
 
