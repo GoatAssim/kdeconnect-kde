@@ -68,7 +68,6 @@ Kirigami.ScrollablePage {
                 text: i18nd("kdeconnect-app", "Refresh status")
                 icon.name: "view-refresh"
                 onClicked: root.pluginInterface.requestStatus()
-            
             }
             QQC2.Button {
                 text: i18nd("kdeconnect-app", "Request permission")

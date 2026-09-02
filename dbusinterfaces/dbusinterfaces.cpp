@@ -204,6 +204,7 @@ ShizukuDbusInterface::ShizukuDbusInterface(const QString &id, QObject *parent)
                                              QDBusConnection::sessionBus(),
                                              parent)
 {
+    connect(this, SIGNAL(responseReceived(QString, QString, QString)), this, SIGNAL(responseReceived(QString, QString, QString)));
 }
 
 TailscaleDbusInterface::TailscaleDbusInterface(const QString &id, QObject *parent)
@@ -212,6 +213,7 @@ TailscaleDbusInterface::TailscaleDbusInterface(const QString &id, QObject *paren
                                                QDBusConnection::sessionBus(),
                                                parent)
 {
-    connect(this, &OrgKdeKdeconnectDeviceTailscaleInterface::remoteIpChanged, this, &TailscaleDbusInterface::remoteIpChangedProxy);
+    connect(this, SIGNAL(remoteIpChanged(QString)), this, SIGNAL(remoteIpChangedProxy(QString)));
+    connect(this, SIGNAL(responseReceived(QString, QString, QString)), this, SIGNAL(responseReceived(QString, QString, QString)));
 }
 #include "moc_dbusinterfaces.cpp"
