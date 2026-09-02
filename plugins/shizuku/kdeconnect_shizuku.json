@@ -1,0 +1,23 @@
+{
+    "$schema": "../kdeconnect.schema.json",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "jarvis@local",
+                "Name": "Jarvis / Shizuku integration"
+            }
+        ],
+        "Description": "Control phone hotspot, Wi-Fi, Bluetooth, install apps and more via Shizuku",
+        "EnabledByDefault": false,
+        "Icon": "network-wireless",
+        "License": "GPL",
+        "Name": "Shizuku Privileged Access",
+        "Id": "kdeconnect_shizuku"
+    },
+    "X-KdeConnect-OutgoingPacketType": [
+        "kdeconnect.shizuku"
+    ],
+    "X-KdeConnect-SupportedPacketType": [
+        "kdeconnect.shizuku"
+    ]
+}

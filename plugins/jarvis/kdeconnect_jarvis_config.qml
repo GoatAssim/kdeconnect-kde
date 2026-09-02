@@ -197,7 +197,7 @@ Kirigami.ScrollablePage {
             visible: view.count === 0
             width: parent.width - Kirigami.Units.gridUnit * 4
             text: i18ndc("kdeconnect-plugins", "@info", "No Jarvis tools found")
-            explanation: i18ndc("kdeconnect-plugins", "@info", "Install jarvis on this computer, then reopen these settings.")
+            explanation: i18ndc("kdeconnect-plugins", "@info", "Start the Jarvis web UI so the live tool list can load. New tools appear here automatically after that — no KDE rebuild needed.")
         }
     }
 
