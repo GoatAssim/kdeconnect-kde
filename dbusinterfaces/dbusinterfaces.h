@@ -261,4 +261,22 @@ Q_SIGNALS:
     void autoShareDisabledChangedProxy(bool b);
 };
 
+class KDECONNECTDBUSINTERFACES_EXPORT ShizukuDbusInterface : public OrgKdeKdeconnectDeviceShizukuInterface
+{
+    Q_OBJECT
+public:
+    explicit ShizukuDbusInterface(const QString &deviceId, QObject *parent = nullptr);
+};
+
+class KDECONNECTDBUSINTERFACES_EXPORT TailscaleDbusInterface : public OrgKdeKdeconnectDeviceTailscaleInterface
+{
+    Q_OBJECT
+    Q_PROPERTY(QString remoteIp READ remoteIp NOTIFY remoteIpChangedProxy)
+    Q_PROPERTY(QString selfIp READ selfIp CONSTANT)
+public:
+    explicit TailscaleDbusInterface(const QString &deviceId, QObject *parent = nullptr);
+
+Q_SIGNALS:
+    void remoteIpChangedProxy(const QString &ip);
+};
 #endif
