@@ -46,6 +46,9 @@ ecm_target_qml_sources(kdeconnect-app SOURCES
     qml/Settings.qml
     qml/WelcomePage.qml
     qml/NotificationPanel.qml
+    qml/shizuku.qml
+    qml/tailscale.qml
+
 )
 
 target_link_libraries(kdeconnect-app PRIVATE

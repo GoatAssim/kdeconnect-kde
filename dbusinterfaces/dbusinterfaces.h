@@ -26,7 +26,9 @@
 #include "generated/remotekeyboardinterface.h"
 #include "generated/remotesystemvolumeinterface.h"
 #include "generated/shareinterface.h"
+#include "generated/shizukuinterface.h"
 #include "generated/smsinterface.h"
+#include "generated/tailscaleinterface.h"
 #include "generated/virtualmonitorinterface.h"
 
 /**

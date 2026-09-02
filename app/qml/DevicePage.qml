@@ -270,7 +270,24 @@ Kirigami.ScrollablePage {
                 name: i18nd("kdeconnect-app", "Address: %1 via %2", root.currentDevice.reachableAddresses, root.currentDevice.activeProviderNames)
                 section: "info"
                 device: root.currentDevice
-            }
+            },
+            PluginItem {
+                name: i18nd("kdeconnect-app", "Shizuku controls")
+                interfaceFactory: ShizukuDbusInterfaceFactory
+                component: "shizuku.qml"
+                pluginName: "kdeconnect_shizuku"
+                section: "control"
+                device: root.currentDevice
+            },
+            PluginItem {
+                name: i18nd("kdeconnect-app", "Tailscale")
+                interfaceFactory: TailscaleDbusInterfaceFactory
+                component: "tailscale.qml"
+                pluginName: "kdeconnect_tailscale"
+                section: "control"
+                device: root.currentDevice
+            },
+
         ]
 
         Kirigami.PlaceholderMessage {

@@ -198,5 +198,20 @@ ClipboardDbusInterface::ClipboardDbusInterface(const QString &deviceId, QObject 
 {
     connect(this, &OrgKdeKdeconnectDeviceClipboardInterface::autoShareDisabledChanged, this, &ClipboardDbusInterface::autoShareDisabledChangedProxy);
 }
+ShizukuDbusInterface::ShizukuDbusInterface(const QString &id, QObject *parent)
+    : OrgKdeKdeconnectDeviceShizukuInterface(DaemonDbusInterface::activatedService(),
+                                             QLatin1String("/modules/kdeconnect/devices/%1/shizuku").arg(id),
+                                             QDBusConnection::sessionBus(),
+                                             parent)
+{
+}
 
+TailscaleDbusInterface::TailscaleDbusInterface(const QString &id, QObject *parent)
+    : OrgKdeKdeconnectDeviceTailscaleInterface(DaemonDbusInterface::activatedService(),
+                                               QLatin1String("/modules/kdeconnect/devices/%1/tailscale").arg(id),
+                                               QDBusConnection::sessionBus(),
+                                               parent)
+{
+    connect(this, &OrgKdeKdeconnectDeviceTailscaleInterface::remoteIpChanged, this, &TailscaleDbusInterface::remoteIpChangedProxy);
+}
 #include "moc_dbusinterfaces.cpp"

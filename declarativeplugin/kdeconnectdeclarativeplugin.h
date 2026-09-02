@@ -30,7 +30,29 @@
 #if defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)
 #include "pointerlockerwayland.h"
 #endif
+class ShizukuDbusInterfaceFactory : public QObject
+{
+    Q_OBJECT
+    QML_ELEMENT
+    QML_SINGLETON
+public:
+    Q_INVOKABLE ShizukuDbusInterface *create(const QString &deviceId)
+    {
+        return new ShizukuDbusInterface(deviceId);
+    }
+};
 
+class TailscaleDbusInterfaceFactory : public QObject
+{
+    Q_OBJECT
+    QML_ELEMENT
+    QML_SINGLETON
+public:
+    Q_INVOKABLE TailscaleDbusInterface *create(const QString &deviceId)
+    {
+        return new TailscaleDbusInterface(deviceId);
+    }
+};
 class KdeConnectPluginConfigForeign
 {
     Q_GADGET
