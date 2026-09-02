@@ -48,6 +48,7 @@ ecm_target_qml_sources(kdeconnect-app SOURCES
     qml/NotificationPanel.qml
     qml/shizuku.qml
     qml/tailscale.qml
+    qml/callbridge.qml
 
 )
 

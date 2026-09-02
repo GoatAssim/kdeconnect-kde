@@ -10,6 +10,7 @@
 #include "kdeconnectdbusinterfaces_export.h"
 
 #include "generated/batteryinterface.h"
+#include "generated/callbridgeinterface.h"
 #include "generated/connectivityinterface.h"
 #include "generated/conversationsinterface.h"
 #include "generated/daemoninterface.h"
@@ -275,5 +276,15 @@ class KDECONNECTDBUSINTERFACES_EXPORT TailscaleDbusInterface : public OrgKdeKdec
     Q_OBJECT
 public:
     explicit TailscaleDbusInterface(const QString &deviceId, QObject *parent = nullptr);
+};
+class KDECONNECTDBUSINTERFACES_EXPORT CallBridgeDbusInterface : public OrgKdeKdeconnectDeviceCallbridgeInterface
+{
+    Q_OBJECT
+public:
+    explicit CallBridgeDbusInterface(const QString &deviceId, QObject *parent = nullptr);
+
+Q_SIGNALS:
+    void responseReceived(const QString &action, const QString &jsonBody, const QString &error);
+    void callEvent(const QString &event, const QString &number, const QString &contactName, const QString &photoBase64);
 };
 #endif

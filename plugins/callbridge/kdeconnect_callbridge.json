@@ -1,0 +1,23 @@
+{
+    "$schema": "../kdeconnect.schema.json",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "jarvis@local",
+                "Name": "Jarvis / Call Bridge"
+            }
+        ],
+        "Description": "Answer, decline and place phone calls from this computer",
+        "EnabledByDefault": false,
+        "Icon": "call-start",
+        "License": "GPL",
+        "Name": "Call Bridge",
+        "Id": "kdeconnect_callbridge"
+    },
+    "X-KdeConnect-OutgoingPacketType": [
+        "kdeconnect.callbridge"
+    ],
+    "X-KdeConnect-SupportedPacketType": [
+        "kdeconnect.callbridge"
+    ]
+}

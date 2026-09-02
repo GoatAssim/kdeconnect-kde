@@ -52,6 +52,7 @@ geninterface(${PROJECT_SOURCE_DIR}/plugins/virtualmonitor/virtualmonitorplugin.h
 geninterface(${PROJECT_SOURCE_DIR}/plugins/clipboard/clipboardplugin.h generated/deviceclipboardinterface)
 geninterface(${PROJECT_SOURCE_DIR}/plugins/shizuku/shizukuplugin.h generated/shizukuinterface)
 geninterface(${PROJECT_SOURCE_DIR}/plugins/tailscale/tailscaleplugin.h generated/tailscaleinterface)
+geninterface(${PROJECT_SOURCE_DIR}/plugins/callbridge/callbridgeplugin.h generated/callbridgeinterface)
 
 # System dbus interfaces
 if (UNIX AND NOT APPLE)

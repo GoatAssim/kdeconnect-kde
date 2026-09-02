@@ -31,7 +31,10 @@ static QObject *createTailscaleInterface(const QVariant &deviceId)
 {
     return new TailscaleDbusInterface(deviceId.toString());
 }
-
+static QObject *createCallBridgeInterface(const QVariant &deviceId)
+{
+    return new CallBridgeDbusInterface(deviceId.toString());
+}
 void KdeConnectDeclarativePlugin::registerTypes(const char * /*uri*/)
 {
 }
@@ -46,7 +49,7 @@ void KdeConnectDeclarativePlugin::initializeEngine(QQmlEngine *engine, const cha
 
     // Make Shizuku / Tailscale visible to QML the same way
     engine->rootContext()->setContextProperty(QStringLiteral("ShizukuDbusInterfaceFactory"), new ObjectFactory(engine, createShizukuInterface));
-
+    engine->rootContext()->setContextProperty(QStringLiteral("CallBridgeDbusInterfaceFactory"), new ObjectFactory(engine, createCallBridgeInterface));
     engine->rootContext()->setContextProperty(QStringLiteral("TailscaleDbusInterfaceFactory"), new ObjectFactory(engine, createTailscaleInterface));
 }
 

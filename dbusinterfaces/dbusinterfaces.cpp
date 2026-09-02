@@ -213,4 +213,13 @@ TailscaleDbusInterface::TailscaleDbusInterface(const QString &id, QObject *paren
                                                parent)
 {
 }
+CallBridgeDbusInterface::CallBridgeDbusInterface(const QString &id, QObject *parent)
+    : OrgKdeKdeconnectDeviceCallbridgeInterface(DaemonDbusInterface::activatedService(),
+                                                QLatin1String("/modules/kdeconnect/devices/%1/callbridge").arg(id),
+                                                QDBusConnection::sessionBus(),
+                                                parent)
+{
+    connect(this, SIGNAL(responseReceived(QString, QString, QString)), this, SIGNAL(responseReceived(QString, QString, QString)));
+    connect(this, SIGNAL(callEvent(QString, QString, QString, QString)), this, SIGNAL(callEvent(QString, QString, QString, QString)));
+}
 #include "moc_dbusinterfaces.cpp"

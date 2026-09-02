@@ -286,6 +286,14 @@ Kirigami.ScrollablePage {
                 pluginName: "tailscale"
                 section: "control"
                 device: root.currentDevice
+            },
+            PluginItem {
+                name: i18nd("kdeconnect-app", "Call Bridge")
+                interfaceFactory: CallBridgeDbusInterfaceFactory
+                component: "callbridge.qml"
+                pluginName: "callbridge"
+                section: "control"
+                device: root.currentDevice
             }
 
         ]
