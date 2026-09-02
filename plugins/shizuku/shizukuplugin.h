@@ -61,10 +61,9 @@ public Q_SLOTS:
     Q_SCRIPTABLE void listPackages(bool userOnly = true);
     Q_SCRIPTABLE void installApk(const QString &path);
     Q_SCRIPTABLE void uninstallPackage(const QString &packageName);
-
 Q_SIGNALS:
     // Emitted whenever a reply arrives from the phone
-    void responseReceived(const QString &action, const QString &jsonBody, const QString &error);
+    Q_SCRIPTABLE void responseReceived(const QString &action, const QString &jsonBody, const QString &error);
 
 private:
     void sendAction(const QString &action, const QVariantMap &extra = {});
