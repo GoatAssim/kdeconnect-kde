@@ -275,7 +275,7 @@ Kirigami.ScrollablePage {
                 name: i18nd("kdeconnect-app", "Shizuku controls")
                 interfaceFactory: ShizukuDbusInterfaceFactory
                 component: "shizuku.qml"
-                pluginName: "kdeconnect_shizuku"
+                pluginName: "shizuku"
                 section: "control"
                 device: root.currentDevice
             },
@@ -283,10 +283,10 @@ Kirigami.ScrollablePage {
                 name: i18nd("kdeconnect-app", "Tailscale")
                 interfaceFactory: TailscaleDbusInterfaceFactory
                 component: "tailscale.qml"
-                pluginName: "kdeconnect_tailscale"
+                pluginName: "tailscale"
                 section: "control"
                 device: root.currentDevice
-            },
+            }
 
         ]
 
