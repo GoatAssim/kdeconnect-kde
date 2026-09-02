@@ -16,27 +16,13 @@
 #include "objectfactory.h"
 #include "responsewaiter.h"
 
-#include "dbusinterfaces.h"
-
 QObject *createDBusResponse()
 {
     return new DBusAsyncResponse();
 }
 
-template<typename T>
-void registerFactory(const char *uri, const char *name)
+void KdeConnectDeclarativePlugin::registerTypes(const char * /*uri*/)
 {
-    qmlRegisterSingletonType<ObjectFactory>(uri, 1, 0, name, [](QQmlEngine *engine, QJSEngine *) -> QObject * {
-        return new ObjectFactory(engine, [](const QVariant &deviceId) -> QObject * {
-            return new T(deviceId.toString());
-        });
-    });
-}
-
-void KdeConnectDeclarativePlugin::registerTypes(const char *uri)
-{
-    registerFactory<ShizukuDbusInterface>(uri, "ShizukuDbusInterfaceFactory");
-    registerFactory<TailscaleDbusInterface>(uri, "TailscaleDbusInterfaceFactory");
 }
 
 void KdeConnectDeclarativePlugin::initializeEngine(QQmlEngine *engine, const char *uri)
@@ -44,6 +30,7 @@ void KdeConnectDeclarativePlugin::initializeEngine(QQmlEngine *engine, const cha
     QQmlExtensionPlugin::initializeEngine(engine, uri);
 
     engine->rootContext()->setContextProperty(QStringLiteral("DBusResponseFactory"), new ObjectFactory(engine, createDBusResponse));
+
     engine->rootContext()->setContextProperty(QStringLiteral("DBusResponseWaiter"), DBusResponseWaiter::instance());
 }
 
