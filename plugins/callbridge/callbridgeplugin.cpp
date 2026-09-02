@@ -31,13 +31,12 @@ void CallBridgePlugin::receivePacket(const NetworkPacket &np)
     const QString body = np.get<QString>(QStringLiteral("body"));
     Q_EMIT responseReceived(action, body, error);
 }
-
 void CallBridgePlugin::handleIncomingEvent(const NetworkPacket &np)
 {
     if (np.get<bool>(QStringLiteral("isCancel"))) {
         if (m_callNotification)
             m_callNotification->close();
-        Q_EMIT callEvent(QStringLiteral("idle"), QString(), QString(), QString());
+        Q_EMIT callEvent(QStringLiteral("idle"), QString(), QString(), QString(), QString());
         return;
     }
 
@@ -46,7 +45,24 @@ void CallBridgePlugin::handleIncomingEvent(const NetworkPacket &np)
     const QString name = np.get<QString>(QStringLiteral("contactName"), number);
     const QByteArray thumb = QByteArray::fromBase64(np.get<QByteArray>(QStringLiteral("phoneThumbnail")));
 
-    Q_EMIT callEvent(event, number, name, QString::fromLatin1(np.get<QByteArray>(QStringLiteral("phoneThumbnail"))));
+    // SIM info from phone
+    const QString simName = np.get<QString>(QStringLiteral("simName"));
+    const QString simCarrier = np.get<QString>(QStringLiteral("simCarrier"));
+    const int simSlot = np.get<int>(QStringLiteral("simSlot"), -1);
+
+    QString simLabel;
+    if (!simName.isEmpty())
+        simLabel = simName;
+    else if (simSlot >= 0)
+        simLabel = i18n("SIM %1", simSlot + 1);
+    if (!simCarrier.isEmpty()) {
+        if (!simLabel.isEmpty())
+            simLabel += QStringLiteral(" (%1)").arg(simCarrier);
+        else
+            simLabel = simCarrier;
+    }
+
+    Q_EMIT callEvent(event, number, name, QString::fromLatin1(np.get<QByteArray>(QStringLiteral("phoneThumbnail"))), simLabel);
 
     if (event == QLatin1String("talking")) {
         if (m_callNotification)
@@ -62,7 +78,11 @@ void CallBridgePlugin::handleIncomingEvent(const NetworkPacket &np)
 
     m_callNotification->setComponentName(QStringLiteral("kdeconnect"));
     m_callNotification->setTitle(device()->name());
-    m_callNotification->setText(i18n("Incoming call from %1", name));
+
+    QString text = i18n("Incoming call from %1", name);
+    if (!simLabel.isEmpty())
+        text += QStringLiteral("\n") + i18n("on %1", simLabel);
+    m_callNotification->setText(text);
     m_callNotification->setIconName(QStringLiteral("call-start"));
 
     if (!thumb.isEmpty()) {

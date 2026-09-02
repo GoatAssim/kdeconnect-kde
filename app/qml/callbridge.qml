@@ -14,22 +14,39 @@ Kirigami.ScrollablePage {
     property string callEvent: "idle"
     property string callName: ""
     property string callNumber: ""
+    property string callSimLabel: ""
 
     ListModel { id: contactModel }
+    ListModel { id: simModel }
+
+    Component.onCompleted: {
+        if (root.pluginInterface) {
+            root.pluginInterface.listSims()
+        }
+    }
 
     Connections {
         target: root.pluginInterface
-        function onCallEvent(event, number, contactName, photoBase64) {
+
+        function onCallEvent(event, number, contactName, photoBase64, simLabel) {
             root.callEvent = event
             root.callNumber = number
             root.callName = contactName
-            root.statusText = event + " — " + contactName + " " + number
+            root.callSimLabel = simLabel || ""
+            if (event === "idle") {
+                root.statusText = i18nd("kdeconnect-app", "Idle")
+            } else {
+                root.statusText = event + " — " + contactName + " " + number
+                    + (simLabel ? (" [" + simLabel + "]") : "")
+            }
         }
+
         function onResponseReceived(action, jsonBody, error) {
-            if (error && error.length)
+            if (error && error.length) {
                 root.statusText = action + " ERROR: " + error
-            else
-                root.statusText = action + "\n" + jsonBody
+                return
+            }
+            root.statusText = action + "\n" + jsonBody
 
             try {
                 const obj = JSON.parse(jsonBody)
@@ -42,7 +59,63 @@ Kirigami.ScrollablePage {
                         })
                     }
                 }
-            } catch (e) {}
+                if (obj.sims) {
+                    simModel.clear()
+                    for (let i = 0; i < obj.sims.length; i++) {
+                        const s = obj.sims[i]
+                        const slot = (s.simSlot !== undefined) ? (s.simSlot + 1) : "?"
+                        const label = (s.simName || ("SIM " + slot))
+                            + (s.carrierName ? (" — " + s.carrierName) : "")
+                        simModel.append({
+                            roleSubId: s.subscriptionId,
+                            roleLabel: label
+                        })
+                    }
+                }
+            } catch (e) {
+            }
+        }
+    }
+
+    function placeCall(number) {
+        const num = (number || "").trim()
+        if (!num.length)
+            return
+        if (simModel.count <= 1) {
+            const sub = simModel.count === 1 ? simModel.get(0).roleSubId : -1
+            root.pluginInterface.dial(num, sub)
+        } else {
+            simDialog.pendingNumber = num
+            simDialog.open()
+        }
+    }
+
+    QQC2.Dialog {
+        id: simDialog
+        property string pendingNumber: ""
+        title: i18nd("kdeconnect-app", "Choose SIM")
+        modal: true
+        standardButtons: QQC2.Dialog.Cancel
+        anchors.centerIn: parent
+
+        ColumnLayout {
+            spacing: Kirigami.Units.smallSpacing
+            QQC2.Label {
+                text: i18nd("kdeconnect-app", "Call %1 with:", simDialog.pendingNumber)
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+            }
+            Repeater {
+                model: simModel
+                delegate: QQC2.Button {
+                    Layout.fillWidth: true
+                    text: model.roleLabel
+                    onClicked: {
+                        root.pluginInterface.dial(simDialog.pendingNumber, model.roleSubId)
+                        simDialog.close()
+                    }
+                }
+            }
         }
     }
 
@@ -61,21 +134,33 @@ Kirigami.ScrollablePage {
         QQC2.Frame {
             Layout.fillWidth: true
             visible: root.callEvent === "ringing" || root.callEvent === "talking"
-            background: Rectangle {
-                color: root.callEvent === "ringing" ? "#3d2a00" : "#1a3320"
-                radius: 6
-            }
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: Kirigami.Units.smallSpacing
+                spacing: Kirigami.Units.smallSpacing
+
                 QQC2.Label {
-                    text: root.callEvent === "ringing" ? i18nd("kdeconnect-app", "Incoming call")
-                                                       : i18nd("kdeconnect-app", "On call")
+                    text: root.callEvent === "ringing"
+                          ? i18nd("kdeconnect-app", "Incoming call")
+                          : i18nd("kdeconnect-app", "On call")
                     font.bold: true
                 }
                 QQC2.Label { text: root.callName }
-                QQC2.Label { text: root.callNumber; opacity: 0.8 }
+                QQC2.Label {
+                    text: root.callNumber
+                    opacity: 0.8
+                }
+                QQC2.Label {
+                    text: root.callSimLabel.length
+                          ? i18nd("kdeconnect-app", "SIM: %1", root.callSimLabel)
+                          : ""
+                    visible: root.callSimLabel.length > 0
+                    opacity: 0.9
+                    font.bold: true
+                }
+
                 RowLayout {
+                    spacing: Kirigami.Units.smallSpacing
                     QQC2.Button {
                         text: i18nd("kdeconnect-app", "Answer")
                         icon.name: "call-start"
@@ -113,7 +198,10 @@ Kirigami.ScrollablePage {
             }
         }
 
-        QQC2.Label { text: i18nd("kdeconnect-app", "Dial"); font.bold: true }
+        QQC2.Label {
+            text: i18nd("kdeconnect-app", "Dial")
+            font.bold: true
+        }
         RowLayout {
             Layout.fillWidth: true
             QQC2.TextField {
@@ -124,10 +212,28 @@ Kirigami.ScrollablePage {
             QQC2.Button {
                 text: i18nd("kdeconnect-app", "Call")
                 icon.name: "call-start"
-                onClicked: {
-                    if (numberField.text.trim().length)
-                        root.pluginInterface.dial(numberField.text.trim())
+                onClicked: root.placeCall(numberField.text)
+            }
+        }
+
+        // Show known SIMs
+        ColumnLayout {
+            Layout.fillWidth: true
+            visible: simModel.count > 0
+            QQC2.Label {
+                text: i18nd("kdeconnect-app", "SIMs on phone")
+                font.bold: true
+            }
+            Repeater {
+                model: simModel
+                delegate: QQC2.Label {
+                    text: "• " + model.roleLabel
+                    opacity: 0.85
                 }
+            }
+            QQC2.Button {
+                text: i18nd("kdeconnect-app", "Refresh SIMs")
+                onClicked: root.pluginInterface.listSims()
             }
         }
 
@@ -156,7 +262,7 @@ Kirigami.ScrollablePage {
                     Layout.fillWidth: true
                     text: model.roleName + " — " + model.roleNumber
                     onClicked: numberField.text = model.roleNumber
-                    onDoubleClicked: root.pluginInterface.dial(model.roleNumber)
+                    onDoubleClicked: root.placeCall(model.roleNumber)
                 }
             }
         }
