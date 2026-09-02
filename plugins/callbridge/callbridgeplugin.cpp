@@ -21,14 +21,19 @@ void CallBridgePlugin::receivePacket(const NetworkPacket &np)
 
     const QString action = np.get<QString>(QStringLiteral("action"));
 
-    // Unsolicited call state events from the phone
     if (action == QLatin1String("event") || np.has(QStringLiteral("event"))) {
         handleIncomingEvent(np);
         return;
     }
 
     const QString error = np.get<QString>(QStringLiteral("error"));
-    const QString body = np.get<QString>(QStringLiteral("body"));
+    QString body = np.get<QString>(QStringLiteral("body"));
+
+    // Some builds may put JSON fields at top level — rebuild a body if empty
+    if (body.isEmpty() && (np.has(QStringLiteral("contacts")) || np.has(QStringLiteral("sims")))) {
+        body = QString::fromUtf8(np.serialize().payload /* not ideal */);
+    }
+
     Q_EMIT responseReceived(action, body, error);
 }
 void CallBridgePlugin::handleIncomingEvent(const NetworkPacket &np)
