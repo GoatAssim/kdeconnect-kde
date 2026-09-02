@@ -266,8 +266,10 @@ class KDECONNECTDBUSINTERFACES_EXPORT ShizukuDbusInterface : public OrgKdeKdecon
     Q_OBJECT
 public:
     explicit ShizukuDbusInterface(const QString &deviceId, QObject *parent = nullptr);
-};
 
+Q_SIGNALS:
+    void responseReceived(const QString &action, const QString &jsonBody, const QString &error);
+};
 class KDECONNECTDBUSINTERFACES_EXPORT TailscaleDbusInterface : public OrgKdeKdeconnectDeviceTailscaleInterface
 {
     Q_OBJECT

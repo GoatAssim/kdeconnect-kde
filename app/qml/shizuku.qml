@@ -10,10 +10,6 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.kdeconnect
 
-/**
- * In-app control page for the Shizuku plugin.
- * property pluginInterface is a ShizukuDbusInterface from ShizukuDbusInterfaceFactory.
- */
 Kirigami.ScrollablePage {
     id: root
 
@@ -27,7 +23,6 @@ Kirigami.ScrollablePage {
     property string rawJsonText: ""
     property bool showRaw: false
 
-    // Models for neat lists
     ListModel { id: packageModel }
     ListModel { id: wifiModel }
     ListModel { id: bluetoothModel }
@@ -42,11 +37,11 @@ Kirigami.ScrollablePage {
         keyValueModel.clear()
     }
 
-    function addKv(key, value) {
-        keyValueModel.append({ key: String(key), value: String(value) })
+    function addKv(k, v) {
+        keyValueModel.append({ roleKey: String(k), roleValue: String(v) })
     }
 
-    function fillKeyValues(obj, prefix) {
+    function fillKeyValues(obj) {
         if (!obj || typeof obj !== "object")
             return
         const skip = {
@@ -57,18 +52,18 @@ Kirigami.ScrollablePage {
             "blockedClients": true
         }
         for (const k in obj) {
-            if (!obj.hasOwnProperty(k) || skip[k])
+            if (skip[k])
                 continue
             const v = obj[k]
             if (v !== null && typeof v === "object")
                 continue
-            addKv(prefix ? (prefix + "." + k) : k, v)
+            addKv(k, v)
         }
     }
 
     function handleResponse(action, jsonBody, error) {
         root.lastAction = action
-        root.lastError = error || ""
+        root.lastError = error ? error : ""
         root.clearLists()
         root.summaryText = ""
         root.rawJsonText = ""
@@ -89,73 +84,70 @@ Kirigami.ScrollablePage {
             return
         }
 
-        // Packages list
         if (obj.packages && Array.isArray(obj.packages)) {
-            root.summaryText = action + " — " + (obj.count !== undefined ? obj.count : obj.packages.length) + " packages"
+            const n = (obj.count !== undefined) ? obj.count : obj.packages.length
+            root.summaryText = action + " — " + n + " packages"
             for (let i = 0; i < obj.packages.length; i++) {
                 const p = obj.packages[i]
+                const label = (p.label && p.label.length) ? p.label : (p.packageName || "")
+                const ver = p.versionName ? ("  ·  " + p.versionName) : ""
                 packageModel.append({
-                    title: (p.label && p.label.length) ? p.label : (p.packageName || ""),
-                    subtitle: (p.packageName || "") + (p.versionName ? ("  ·  " + p.versionName) : ""),
-                    packageName: p.packageName || ""
+                    roleTitle: label,
+                    roleSubtitle: (p.packageName || "") + ver,
+                    rolePackageName: p.packageName || ""
                 })
             }
-            fillKeyValues(obj, "")
+            fillKeyValues(obj)
             return
         }
 
-        // Wi‑Fi scan list
         if (obj.networks && Array.isArray(obj.networks)) {
-            root.summaryText = action + " — " + (obj.count !== undefined ? obj.count : obj.networks.length) + " networks"
+            const n = (obj.count !== undefined) ? obj.count : obj.networks.length
+            root.summaryText = action + " — " + n + " networks"
             for (let i = 0; i < obj.networks.length; i++) {
-                const n = obj.networks[i]
-                const ssid = (n.ssid && n.ssid.length) ? n.ssid : "(hidden)"
-                wifiModel.append({
-                    title: ssid,
-                    subtitle: (n.bssid || "") + (n.level !== undefined ? ("  ·  " + n.level + " dBm") : "")
-                        + (n.frequency !== undefined ? ("  ·  " + n.frequency + " MHz") : ""),
-                    level: n.level !== undefined ? n.level : -999
-                })
+                const net = obj.networks[i]
+                const ssid = (net.ssid && net.ssid.length) ? net.ssid : "(hidden)"
+                let sub = net.bssid || ""
+                if (net.level !== undefined)
+                    sub += "  ·  " + net.level + " dBm"
+                if (net.frequency !== undefined)
+                    sub += "  ·  " + net.frequency + " MHz"
+                wifiModel.append({ roleTitle: ssid, roleSubtitle: sub })
             }
-            fillKeyValues(obj, "")
+            fillKeyValues(obj)
             return
         }
 
-        // Bluetooth bonded devices
         if (obj.bondedDevices && Array.isArray(obj.bondedDevices)) {
             root.summaryText = action + " — Bluetooth"
-            fillKeyValues(obj, "")
+            fillKeyValues(obj)
             for (let i = 0; i < obj.bondedDevices.length; i++) {
                 const d = obj.bondedDevices[i]
-                bluetoothModel.append({
-                    title: (d.name && d.name.length) ? d.name : (d.address || "Unknown"),
-                    subtitle: d.address || ""
-                })
+                const name = (d.name && d.name.length) ? d.name : (d.address || "Unknown")
+                bluetoothModel.append({ roleTitle: name, roleSubtitle: d.address || "" })
             }
             return
         }
 
-        // Hotspot clients
         if (obj.clients && Array.isArray(obj.clients)) {
             root.summaryText = action + " — " + obj.clients.length + " clients"
             for (let i = 0; i < obj.clients.length; i++) {
                 const c = obj.clients[i]
                 if (typeof c === "string") {
-                    clientModel.append({ title: c, subtitle: "" })
+                    clientModel.append({ roleTitle: c, roleSubtitle: "" })
                 } else {
                     clientModel.append({
-                        title: c.mac || c.address || c.name || JSON.stringify(c),
-                        subtitle: c.name || c.ip || ""
+                        roleTitle: c.mac || c.address || c.name || JSON.stringify(c),
+                        roleSubtitle: c.name || c.ip || ""
                     })
                 }
             }
-            fillKeyValues(obj, "")
+            fillKeyValues(obj)
             return
         }
 
-        // Generic object → key/value table
         root.summaryText = action
-        fillKeyValues(obj, "")
+        fillKeyValues(obj)
         if (obj.error)
             root.summaryText = action + " — " + obj.error
         else if (obj.success === true)
@@ -182,7 +174,6 @@ Kirigami.ScrollablePage {
             visible: true
         }
 
-        // ── Status ───────────────────────────────────────────────────────────
         Kirigami.FormLayout {
             Layout.fillWidth: true
             QQC2.Button {
@@ -200,7 +191,6 @@ Kirigami.ScrollablePage {
 
         Kirigami.Separator { Layout.fillWidth: true }
 
-        // ── Battery ──────────────────────────────────────────────────────────
         QQC2.Label { text: i18nd("kdeconnect-app", "Battery"); font.bold: true }
         QQC2.Button {
             text: i18nd("kdeconnect-app", "Get battery info")
@@ -211,7 +201,6 @@ Kirigami.ScrollablePage {
 
         Kirigami.Separator { Layout.fillWidth: true }
 
-        // ── Wi-Fi ────────────────────────────────────────────────────────────
         QQC2.Label { text: i18nd("kdeconnect-app", "Wi-Fi"); font.bold: true }
         GridLayout {
             columns: 2
@@ -246,7 +235,6 @@ Kirigami.ScrollablePage {
 
         Kirigami.Separator { Layout.fillWidth: true }
 
-        // ── Bluetooth ────────────────────────────────────────────────────────
         QQC2.Label { text: i18nd("kdeconnect-app", "Bluetooth"); font.bold: true }
         GridLayout {
             columns: 3
@@ -274,7 +262,6 @@ Kirigami.ScrollablePage {
 
         Kirigami.Separator { Layout.fillWidth: true }
 
-        // ── Hotspot ──────────────────────────────────────────────────────────
         QQC2.Label { text: i18nd("kdeconnect-app", "Hotspot"); font.bold: true }
         GridLayout {
             columns: 2
@@ -358,7 +345,6 @@ Kirigami.ScrollablePage {
 
         Kirigami.Separator { Layout.fillWidth: true }
 
-        // ── Packages ─────────────────────────────────────────────────────────
         QQC2.Label { text: i18nd("kdeconnect-app", "Packages"); font.bold: true }
         RowLayout {
             Layout.fillWidth: true
@@ -410,7 +396,6 @@ Kirigami.ScrollablePage {
 
         Kirigami.Separator { Layout.fillWidth: true }
 
-        // ── Response ─────────────────────────────────────────────────────────
         RowLayout {
             Layout.fillWidth: true
             QQC2.Label {
@@ -418,7 +403,7 @@ Kirigami.ScrollablePage {
                 font.bold: true
                 Layout.fillWidth: true
             }
-            QQC2.Switch {
+            QQC2.CheckBox {
                 text: i18nd("kdeconnect-app", "Raw JSON")
                 checked: root.showRaw
                 onToggled: root.showRaw = checked
@@ -433,206 +418,158 @@ Kirigami.ScrollablePage {
             font.bold: true
         }
 
-        // Key / value summary (status, battery, success/error fields, etc.)
-        QQC2.Frame {
+        // Key / value rows
+        ColumnLayout {
             Layout.fillWidth: true
+            spacing: 2
             visible: keyValueModel.count > 0 && !root.showRaw
-            implicitHeight: Math.min(kvList.contentHeight + 16, Kirigami.Units.gridUnit * 14)
 
-            ListView {
-                id: kvList
-                anchors.fill: parent
-                anchors.margins: Kirigami.Units.smallSpacing
-                clip: true
+            Repeater {
                 model: keyValueModel
-                boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: QQC2.ScrollBar { policy: QQC2.ScrollBar.AsNeeded }
-
-                delegate: Item {
-                    width: kvList.width
-                    height: kvRow.implicitHeight + Kirigami.Units.smallSpacing
-                    RowLayout {
-                        id: kvRow
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        spacing: Kirigami.Units.largeSpacing
-                        QQC2.Label {
-                            text: model.key
-                            font.bold: true
-                            Layout.preferredWidth: parent.width * 0.35
-                            elide: Text.ElideRight
-                        }
-                        QQC2.Label {
-                            text: model.value
-                            Layout.fillWidth: true
-                            wrapMode: Text.Wrap
-                        }
+                delegate: RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.largeSpacing
+                    QQC2.Label {
+                        text: model.roleKey
+                        font.bold: true
+                        Layout.preferredWidth: root.width * 0.35
+                        elide: Text.ElideRight
+                    }
+                    QQC2.Label {
+                        text: model.roleValue
+                        Layout.fillWidth: true
+                        wrapMode: Text.Wrap
                     }
                 }
             }
         }
 
-        // Packages list
-        QQC2.Frame {
+        // Packages
+        ColumnLayout {
             Layout.fillWidth: true
+            spacing: 0
             visible: packageModel.count > 0 && !root.showRaw
-            implicitHeight: Math.min(pkgList.contentHeight + 16, Kirigami.Units.gridUnit * 18)
 
-            ListView {
-                id: pkgList
-                anchors.fill: parent
-                anchors.margins: Kirigami.Units.smallSpacing
-                clip: true
+            Repeater {
                 model: packageModel
-                boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: QQC2.ScrollBar { policy: QQC2.ScrollBar.AsNeeded }
-
                 delegate: QQC2.ItemDelegate {
-                    width: pkgList.width
-                    text: model.title
-                    onClicked: pkgNameField.text = model.packageName
-
+                    Layout.fillWidth: true
+                    onClicked: pkgNameField.text = model.rolePackageName
                     contentItem: ColumnLayout {
                         spacing: 2
                         QQC2.Label {
-                            text: model.title
+                            text: model.roleTitle
+                            font.bold: true
                             elide: Text.ElideRight
                             Layout.fillWidth: true
-                            font.bold: true
                         }
                         QQC2.Label {
-                            text: model.subtitle
+                            text: model.roleSubtitle
+                            opacity: 0.7
                             elide: Text.ElideRight
                             Layout.fillWidth: true
-                            opacity: 0.7
-                            font.pointSize: Kirigami.Theme.smallFont.pointSize
                         }
                     }
                 }
             }
         }
 
-        // Wi‑Fi networks list
-        QQC2.Frame {
+        // Wi-Fi
+        ColumnLayout {
             Layout.fillWidth: true
+            spacing: 0
             visible: wifiModel.count > 0 && !root.showRaw
-            implicitHeight: Math.min(wifiList.contentHeight + 16, Kirigami.Units.gridUnit * 16)
 
-            ListView {
-                id: wifiList
-                anchors.fill: parent
-                anchors.margins: Kirigami.Units.smallSpacing
-                clip: true
+            Repeater {
                 model: wifiModel
-                boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: QQC2.ScrollBar { policy: QQC2.ScrollBar.AsNeeded }
-
                 delegate: QQC2.ItemDelegate {
-                    width: wifiList.width
+                    Layout.fillWidth: true
                     contentItem: ColumnLayout {
                         spacing: 2
                         QQC2.Label {
-                            text: model.title
+                            text: model.roleTitle
+                            font.bold: true
                             elide: Text.ElideRight
                             Layout.fillWidth: true
-                            font.bold: true
                         }
                         QQC2.Label {
-                            text: model.subtitle
+                            text: model.roleSubtitle
+                            opacity: 0.7
                             elide: Text.ElideRight
                             Layout.fillWidth: true
-                            opacity: 0.7
-                            font.pointSize: Kirigami.Theme.smallFont.pointSize
                         }
                     }
                 }
             }
         }
 
-        // Bluetooth devices list
-        QQC2.Frame {
+        // Bluetooth
+        ColumnLayout {
             Layout.fillWidth: true
+            spacing: 0
             visible: bluetoothModel.count > 0 && !root.showRaw
-            implicitHeight: Math.min(btList.contentHeight + 16, Kirigami.Units.gridUnit * 12)
 
-            ListView {
-                id: btList
-                anchors.fill: parent
-                anchors.margins: Kirigami.Units.smallSpacing
-                clip: true
+            Repeater {
                 model: bluetoothModel
-                boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: QQC2.ScrollBar { policy: QQC2.ScrollBar.AsNeeded }
-
                 delegate: QQC2.ItemDelegate {
-                    width: btList.width
+                    Layout.fillWidth: true
                     contentItem: ColumnLayout {
                         spacing: 2
                         QQC2.Label {
-                            text: model.title
+                            text: model.roleTitle
+                            font.bold: true
                             elide: Text.ElideRight
                             Layout.fillWidth: true
-                            font.bold: true
                         }
                         QQC2.Label {
-                            text: model.subtitle
+                            text: model.roleSubtitle
+                            opacity: 0.7
                             elide: Text.ElideRight
                             Layout.fillWidth: true
-                            opacity: 0.7
-                            font.pointSize: Kirigami.Theme.smallFont.pointSize
                         }
                     }
                 }
             }
         }
 
-        // Hotspot clients list
-        QQC2.Frame {
+        // Clients
+        ColumnLayout {
             Layout.fillWidth: true
+            spacing: 0
             visible: clientModel.count > 0 && !root.showRaw
-            implicitHeight: Math.min(clientList.contentHeight + 16, Kirigami.Units.gridUnit * 10)
 
-            ListView {
-                id: clientList
-                anchors.fill: parent
-                anchors.margins: Kirigami.Units.smallSpacing
-                clip: true
+            Repeater {
                 model: clientModel
-                boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: QQC2.ScrollBar { policy: QQC2.ScrollBar.AsNeeded }
-
                 delegate: QQC2.ItemDelegate {
-                    width: clientList.width
+                    Layout.fillWidth: true
                     contentItem: ColumnLayout {
                         spacing: 2
                         QQC2.Label {
-                            text: model.title
+                            text: model.roleTitle
+                            font.bold: true
                             elide: Text.ElideRight
                             Layout.fillWidth: true
-                            font.bold: true
                         }
                         QQC2.Label {
-                            text: model.subtitle
-                            visible: model.subtitle.length > 0
+                            text: model.roleSubtitle
+                            visible: model.roleSubtitle.length > 0
+                            opacity: 0.7
                             elide: Text.ElideRight
                             Layout.fillWidth: true
-                            opacity: 0.7
                         }
                     }
                 }
             }
         }
 
-        // Raw JSON (scrollable)
+        // Raw JSON — scrollable
         QQC2.ScrollView {
-            id: rawScroll
             Layout.fillWidth: true
             Layout.preferredHeight: Kirigami.Units.gridUnit * 14
             visible: root.showRaw
             clip: true
 
             QQC2.TextArea {
-                id: responseArea
                 readOnly: true
                 wrapMode: TextEdit.Wrap
                 text: root.rawJsonText
@@ -641,7 +578,6 @@ Kirigami.ScrollablePage {
             }
         }
 
-        // Hint when nothing yet
         QQC2.Label {
             Layout.fillWidth: true
             visible: packageModel.count === 0
