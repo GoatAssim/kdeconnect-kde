@@ -9,7 +9,8 @@ add_subdirectory(clipboard)
 add_subdirectory(runcommand)
 add_subdirectory(jarvis)
 add_subdirectory(digitizer)
-
+add_subdirectory(shizuku)
+add_subdirectory(tailscale)
 
 if(NOT WIN32)
     # https://bugs.kde.org/show_bug.cgi?id=444612
