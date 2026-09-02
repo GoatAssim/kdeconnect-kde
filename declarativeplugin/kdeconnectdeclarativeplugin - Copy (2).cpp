@@ -13,27 +13,30 @@
 #include <QQmlEngine>
 #include <devicespluginfilterproxymodel.h>
 
-#include "dbusinterfaces.h"
 #include "objectfactory.h"
 #include "responsewaiter.h"
+
+#include "dbusinterfaces.h"
 
 QObject *createDBusResponse()
 {
     return new DBusAsyncResponse();
 }
 
-static QObject *createShizukuInterface(const QVariant &deviceId)
+template<typename T>
+void registerFactory(const char *uri, const char *name)
 {
-    return new ShizukuDbusInterface(deviceId.toString());
+    qmlRegisterSingletonType<ObjectFactory>(uri, 1, 0, name, [](QQmlEngine *engine, QJSEngine *) -> QObject * {
+        return new ObjectFactory(engine, [](const QVariant &deviceId) -> QObject * {
+            return new T(deviceId.toString());
+        });
+    });
 }
 
-static QObject *createTailscaleInterface(const QVariant &deviceId)
+void KdeConnectDeclarativePlugin::registerTypes(const char *uri)
 {
-    return new TailscaleDbusInterface(deviceId.toString());
-}
-
-void KdeConnectDeclarativePlugin::registerTypes(const char * /*uri*/)
-{
+    registerFactory<ShizukuDbusInterface>(uri, "ShizukuDbusInterfaceFactory");
+    registerFactory<TailscaleDbusInterface>(uri, "TailscaleDbusInterfaceFactory");
 }
 
 void KdeConnectDeclarativePlugin::initializeEngine(QQmlEngine *engine, const char *uri)
@@ -41,13 +44,7 @@ void KdeConnectDeclarativePlugin::initializeEngine(QQmlEngine *engine, const cha
     QQmlExtensionPlugin::initializeEngine(engine, uri);
 
     engine->rootContext()->setContextProperty(QStringLiteral("DBusResponseFactory"), new ObjectFactory(engine, createDBusResponse));
-
     engine->rootContext()->setContextProperty(QStringLiteral("DBusResponseWaiter"), DBusResponseWaiter::instance());
-
-    // Make Shizuku / Tailscale visible to QML the same way
-    engine->rootContext()->setContextProperty(QStringLiteral("ShizukuDbusInterfaceFactory"), new ObjectFactory(engine, createShizukuInterface));
-
-    engine->rootContext()->setContextProperty(QStringLiteral("TailscaleDbusInterfaceFactory"), new ObjectFactory(engine, createTailscaleInterface));
 }
 
 #include "moc_kdeconnectdeclarativeplugin.cpp"
