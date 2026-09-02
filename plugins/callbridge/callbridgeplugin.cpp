@@ -161,11 +161,6 @@ void CallBridgePlugin::requestStatus()
     sendAction(QStringLiteral("status"));
 }
 
-void CallBridgePlugin::dial(const QString &number)
-{
-    sendAction(QStringLiteral("dial"), {{QStringLiteral("number"), number}});
-}
-
 void CallBridgePlugin::listContacts(const QString &query)
 {
     sendAction(QStringLiteral("contacts.list"), {{QStringLiteral("query"), query}});
