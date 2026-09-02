@@ -12,9 +12,7 @@ import org.kde.kdeconnect
 
 /**
  * In-app control page for the Shizuku plugin.
- * Opened from DevicePage via PluginItem (same pattern as mpris.qml / runcommand.qml).
- *
- * property pluginInterface is a ShizukuDbusInterface created by ShizukuDbusInterfaceFactory.
+ * property pluginInterface is a ShizukuDbusInterface from ShizukuDbusInterfaceFactory.
  */
 Kirigami.ScrollablePage {
     id: root
@@ -23,28 +21,153 @@ Kirigami.ScrollablePage {
     property QtObject pluginInterface
     property QtObject device
 
-    // Latest reply from the phone
     property string lastAction: ""
-    property string lastBody: ""
     property string lastError: ""
+    property string summaryText: ""
+    property string rawJsonText: ""
+    property bool showRaw: false
+
+    // Models for neat lists
+    ListModel { id: packageModel }
+    ListModel { id: wifiModel }
+    ListModel { id: bluetoothModel }
+    ListModel { id: clientModel }
+    ListModel { id: keyValueModel }
+
+    function clearLists() {
+        packageModel.clear()
+        wifiModel.clear()
+        bluetoothModel.clear()
+        clientModel.clear()
+        keyValueModel.clear()
+    }
+
+    function addKv(key, value) {
+        keyValueModel.append({ key: String(key), value: String(value) })
+    }
+
+    function fillKeyValues(obj, prefix) {
+        if (!obj || typeof obj !== "object")
+            return
+        const skip = {
+            "packages": true,
+            "networks": true,
+            "bondedDevices": true,
+            "clients": true,
+            "blockedClients": true
+        }
+        for (const k in obj) {
+            if (!obj.hasOwnProperty(k) || skip[k])
+                continue
+            const v = obj[k]
+            if (v !== null && typeof v === "object")
+                continue
+            addKv(prefix ? (prefix + "." + k) : k, v)
+        }
+    }
+
+    function handleResponse(action, jsonBody, error) {
+        root.lastAction = action
+        root.lastError = error || ""
+        root.clearLists()
+        root.summaryText = ""
+        root.rawJsonText = ""
+
+        if (error && error.length > 0) {
+            root.summaryText = action + " — ERROR\n" + error
+            root.rawJsonText = error
+            return
+        }
+
+        let obj = null
+        try {
+            obj = JSON.parse(jsonBody)
+            root.rawJsonText = JSON.stringify(obj, null, 2)
+        } catch (e) {
+            root.summaryText = action + "\n" + jsonBody
+            root.rawJsonText = jsonBody
+            return
+        }
+
+        // Packages list
+        if (obj.packages && Array.isArray(obj.packages)) {
+            root.summaryText = action + " — " + (obj.count !== undefined ? obj.count : obj.packages.length) + " packages"
+            for (let i = 0; i < obj.packages.length; i++) {
+                const p = obj.packages[i]
+                packageModel.append({
+                    title: (p.label && p.label.length) ? p.label : (p.packageName || ""),
+                    subtitle: (p.packageName || "") + (p.versionName ? ("  ·  " + p.versionName) : ""),
+                    packageName: p.packageName || ""
+                })
+            }
+            fillKeyValues(obj, "")
+            return
+        }
+
+        // Wi‑Fi scan list
+        if (obj.networks && Array.isArray(obj.networks)) {
+            root.summaryText = action + " — " + (obj.count !== undefined ? obj.count : obj.networks.length) + " networks"
+            for (let i = 0; i < obj.networks.length; i++) {
+                const n = obj.networks[i]
+                const ssid = (n.ssid && n.ssid.length) ? n.ssid : "(hidden)"
+                wifiModel.append({
+                    title: ssid,
+                    subtitle: (n.bssid || "") + (n.level !== undefined ? ("  ·  " + n.level + " dBm") : "")
+                        + (n.frequency !== undefined ? ("  ·  " + n.frequency + " MHz") : ""),
+                    level: n.level !== undefined ? n.level : -999
+                })
+            }
+            fillKeyValues(obj, "")
+            return
+        }
+
+        // Bluetooth bonded devices
+        if (obj.bondedDevices && Array.isArray(obj.bondedDevices)) {
+            root.summaryText = action + " — Bluetooth"
+            fillKeyValues(obj, "")
+            for (let i = 0; i < obj.bondedDevices.length; i++) {
+                const d = obj.bondedDevices[i]
+                bluetoothModel.append({
+                    title: (d.name && d.name.length) ? d.name : (d.address || "Unknown"),
+                    subtitle: d.address || ""
+                })
+            }
+            return
+        }
+
+        // Hotspot clients
+        if (obj.clients && Array.isArray(obj.clients)) {
+            root.summaryText = action + " — " + obj.clients.length + " clients"
+            for (let i = 0; i < obj.clients.length; i++) {
+                const c = obj.clients[i]
+                if (typeof c === "string") {
+                    clientModel.append({ title: c, subtitle: "" })
+                } else {
+                    clientModel.append({
+                        title: c.mac || c.address || c.name || JSON.stringify(c),
+                        subtitle: c.name || c.ip || ""
+                    })
+                }
+            }
+            fillKeyValues(obj, "")
+            return
+        }
+
+        // Generic object → key/value table
+        root.summaryText = action
+        fillKeyValues(obj, "")
+        if (obj.error)
+            root.summaryText = action + " — " + obj.error
+        else if (obj.success === true)
+            root.summaryText = action + " — success"
+        else if (obj.success === false)
+            root.summaryText = action + " — failed" + (obj.error ? (": " + obj.error) : "")
+    }
 
     Connections {
         target: root.pluginInterface
         function onResponseReceived(action, jsonBody, error) {
-            root.lastAction = action
-            root.lastBody = jsonBody
-            root.lastError = error
-            if (error && error.length > 0) {
-                responseArea.text = action + " — ERROR\n" + error
-            } else {
-                // Pretty-print JSON when possible
-                try {
-                    const obj = JSON.parse(jsonBody)
-                    responseArea.text = action + "\n" + JSON.stringify(obj, null, 2)
-                } catch (e) {
-                    responseArea.text = action + "\n" + jsonBody
-                }
-            }
+            root.handleResponse(action, jsonBody, error)
         }
     }
 
@@ -62,13 +185,11 @@ Kirigami.ScrollablePage {
         // ── Status ───────────────────────────────────────────────────────────
         Kirigami.FormLayout {
             Layout.fillWidth: true
-
             QQC2.Button {
                 Kirigami.FormData.label: i18nd("kdeconnect-app", "Status")
                 text: i18nd("kdeconnect-app", "Refresh status")
                 icon.name: "view-refresh"
                 onClicked: root.pluginInterface.requestStatus()
-            
             }
             QQC2.Button {
                 text: i18nd("kdeconnect-app", "Request permission")
@@ -80,10 +201,7 @@ Kirigami.ScrollablePage {
         Kirigami.Separator { Layout.fillWidth: true }
 
         // ── Battery ──────────────────────────────────────────────────────────
-        QQC2.Label {
-            text: i18nd("kdeconnect-app", "Battery")
-            font.bold: true
-        }
+        QQC2.Label { text: i18nd("kdeconnect-app", "Battery"); font.bold: true }
         QQC2.Button {
             text: i18nd("kdeconnect-app", "Get battery info")
             icon.name: "battery-full"
@@ -94,16 +212,12 @@ Kirigami.ScrollablePage {
         Kirigami.Separator { Layout.fillWidth: true }
 
         // ── Wi-Fi ────────────────────────────────────────────────────────────
-        QQC2.Label {
-            text: i18nd("kdeconnect-app", "Wi-Fi")
-            font.bold: true
-        }
+        QQC2.Label { text: i18nd("kdeconnect-app", "Wi-Fi"); font.bold: true }
         GridLayout {
             columns: 2
             Layout.fillWidth: true
             columnSpacing: Kirigami.Units.smallSpacing
             rowSpacing: Kirigami.Units.smallSpacing
-
             QQC2.Button {
                 text: i18nd("kdeconnect-app", "Status")
                 icon.name: "network-wireless"
@@ -133,15 +247,11 @@ Kirigami.ScrollablePage {
         Kirigami.Separator { Layout.fillWidth: true }
 
         // ── Bluetooth ────────────────────────────────────────────────────────
-        QQC2.Label {
-            text: i18nd("kdeconnect-app", "Bluetooth")
-            font.bold: true
-        }
+        QQC2.Label { text: i18nd("kdeconnect-app", "Bluetooth"); font.bold: true }
         GridLayout {
             columns: 3
             Layout.fillWidth: true
             columnSpacing: Kirigami.Units.smallSpacing
-
             QQC2.Button {
                 text: i18nd("kdeconnect-app", "Status")
                 icon.name: "network-bluetooth"
@@ -165,16 +275,12 @@ Kirigami.ScrollablePage {
         Kirigami.Separator { Layout.fillWidth: true }
 
         // ── Hotspot ──────────────────────────────────────────────────────────
-        QQC2.Label {
-            text: i18nd("kdeconnect-app", "Hotspot")
-            font.bold: true
-        }
+        QQC2.Label { text: i18nd("kdeconnect-app", "Hotspot"); font.bold: true }
         GridLayout {
             columns: 2
             Layout.fillWidth: true
             columnSpacing: Kirigami.Units.smallSpacing
             rowSpacing: Kirigami.Units.smallSpacing
-
             QQC2.Button {
                 text: i18nd("kdeconnect-app", "Status")
                 icon.name: "network-wireless-hotspot"
@@ -253,10 +359,7 @@ Kirigami.ScrollablePage {
         Kirigami.Separator { Layout.fillWidth: true }
 
         // ── Packages ─────────────────────────────────────────────────────────
-        QQC2.Label {
-            text: i18nd("kdeconnect-app", "Packages")
-            font.bold: true
-        }
+        QQC2.Label { text: i18nd("kdeconnect-app", "Packages"); font.bold: true }
         RowLayout {
             Layout.fillWidth: true
             QQC2.Button {
@@ -307,19 +410,249 @@ Kirigami.ScrollablePage {
 
         Kirigami.Separator { Layout.fillWidth: true }
 
-        // ── Response log ─────────────────────────────────────────────────────
+        // ── Response ─────────────────────────────────────────────────────────
+        RowLayout {
+            Layout.fillWidth: true
+            QQC2.Label {
+                text: i18nd("kdeconnect-app", "Response")
+                font.bold: true
+                Layout.fillWidth: true
+            }
+            QQC2.Switch {
+                text: i18nd("kdeconnect-app", "Raw JSON")
+                checked: root.showRaw
+                onToggled: root.showRaw = checked
+            }
+        }
+
         QQC2.Label {
-            text: i18nd("kdeconnect-app", "Response")
+            Layout.fillWidth: true
+            text: root.summaryText
+            wrapMode: Text.Wrap
+            visible: root.summaryText.length > 0
             font.bold: true
         }
-        QQC2.TextArea {
-            id: responseArea
+
+        // Key / value summary (status, battery, success/error fields, etc.)
+        QQC2.Frame {
             Layout.fillWidth: true
-            Layout.preferredHeight: Kirigami.Units.gridUnit * 12
-            readOnly: true
-            wrapMode: TextEdit.Wrap
-            font.family: "monospace"
-            placeholderText: i18nd("kdeconnect-app", "Responses from the phone appear here…")
+            visible: keyValueModel.count > 0 && !root.showRaw
+            implicitHeight: Math.min(kvList.contentHeight + 16, Kirigami.Units.gridUnit * 14)
+
+            ListView {
+                id: kvList
+                anchors.fill: parent
+                anchors.margins: Kirigami.Units.smallSpacing
+                clip: true
+                model: keyValueModel
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: QQC2.ScrollBar { policy: QQC2.ScrollBar.AsNeeded }
+
+                delegate: Item {
+                    width: kvList.width
+                    height: kvRow.implicitHeight + Kirigami.Units.smallSpacing
+                    RowLayout {
+                        id: kvRow
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        spacing: Kirigami.Units.largeSpacing
+                        QQC2.Label {
+                            text: model.key
+                            font.bold: true
+                            Layout.preferredWidth: parent.width * 0.35
+                            elide: Text.ElideRight
+                        }
+                        QQC2.Label {
+                            text: model.value
+                            Layout.fillWidth: true
+                            wrapMode: Text.Wrap
+                        }
+                    }
+                }
+            }
+        }
+
+        // Packages list
+        QQC2.Frame {
+            Layout.fillWidth: true
+            visible: packageModel.count > 0 && !root.showRaw
+            implicitHeight: Math.min(pkgList.contentHeight + 16, Kirigami.Units.gridUnit * 18)
+
+            ListView {
+                id: pkgList
+                anchors.fill: parent
+                anchors.margins: Kirigami.Units.smallSpacing
+                clip: true
+                model: packageModel
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: QQC2.ScrollBar { policy: QQC2.ScrollBar.AsNeeded }
+
+                delegate: QQC2.ItemDelegate {
+                    width: pkgList.width
+                    text: model.title
+                    onClicked: pkgNameField.text = model.packageName
+
+                    contentItem: ColumnLayout {
+                        spacing: 2
+                        QQC2.Label {
+                            text: model.title
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                            font.bold: true
+                        }
+                        QQC2.Label {
+                            text: model.subtitle
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                            opacity: 0.7
+                            font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        }
+                    }
+                }
+            }
+        }
+
+        // Wi‑Fi networks list
+        QQC2.Frame {
+            Layout.fillWidth: true
+            visible: wifiModel.count > 0 && !root.showRaw
+            implicitHeight: Math.min(wifiList.contentHeight + 16, Kirigami.Units.gridUnit * 16)
+
+            ListView {
+                id: wifiList
+                anchors.fill: parent
+                anchors.margins: Kirigami.Units.smallSpacing
+                clip: true
+                model: wifiModel
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: QQC2.ScrollBar { policy: QQC2.ScrollBar.AsNeeded }
+
+                delegate: QQC2.ItemDelegate {
+                    width: wifiList.width
+                    contentItem: ColumnLayout {
+                        spacing: 2
+                        QQC2.Label {
+                            text: model.title
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                            font.bold: true
+                        }
+                        QQC2.Label {
+                            text: model.subtitle
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                            opacity: 0.7
+                            font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        }
+                    }
+                }
+            }
+        }
+
+        // Bluetooth devices list
+        QQC2.Frame {
+            Layout.fillWidth: true
+            visible: bluetoothModel.count > 0 && !root.showRaw
+            implicitHeight: Math.min(btList.contentHeight + 16, Kirigami.Units.gridUnit * 12)
+
+            ListView {
+                id: btList
+                anchors.fill: parent
+                anchors.margins: Kirigami.Units.smallSpacing
+                clip: true
+                model: bluetoothModel
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: QQC2.ScrollBar { policy: QQC2.ScrollBar.AsNeeded }
+
+                delegate: QQC2.ItemDelegate {
+                    width: btList.width
+                    contentItem: ColumnLayout {
+                        spacing: 2
+                        QQC2.Label {
+                            text: model.title
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                            font.bold: true
+                        }
+                        QQC2.Label {
+                            text: model.subtitle
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                            opacity: 0.7
+                            font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        }
+                    }
+                }
+            }
+        }
+
+        // Hotspot clients list
+        QQC2.Frame {
+            Layout.fillWidth: true
+            visible: clientModel.count > 0 && !root.showRaw
+            implicitHeight: Math.min(clientList.contentHeight + 16, Kirigami.Units.gridUnit * 10)
+
+            ListView {
+                id: clientList
+                anchors.fill: parent
+                anchors.margins: Kirigami.Units.smallSpacing
+                clip: true
+                model: clientModel
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: QQC2.ScrollBar { policy: QQC2.ScrollBar.AsNeeded }
+
+                delegate: QQC2.ItemDelegate {
+                    width: clientList.width
+                    contentItem: ColumnLayout {
+                        spacing: 2
+                        QQC2.Label {
+                            text: model.title
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                            font.bold: true
+                        }
+                        QQC2.Label {
+                            text: model.subtitle
+                            visible: model.subtitle.length > 0
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                            opacity: 0.7
+                        }
+                    }
+                }
+            }
+        }
+
+        // Raw JSON (scrollable)
+        QQC2.ScrollView {
+            id: rawScroll
+            Layout.fillWidth: true
+            Layout.preferredHeight: Kirigami.Units.gridUnit * 14
+            visible: root.showRaw
+            clip: true
+
+            QQC2.TextArea {
+                id: responseArea
+                readOnly: true
+                wrapMode: TextEdit.Wrap
+                text: root.rawJsonText
+                font.family: "monospace"
+                placeholderText: i18nd("kdeconnect-app", "Responses from the phone appear here…")
+            }
+        }
+
+        // Hint when nothing yet
+        QQC2.Label {
+            Layout.fillWidth: true
+            visible: packageModel.count === 0
+                     && wifiModel.count === 0
+                     && bluetoothModel.count === 0
+                     && clientModel.count === 0
+                     && keyValueModel.count === 0
+                     && root.summaryText.length === 0
+                     && !root.showRaw
+            text: i18nd("kdeconnect-app", "Responses from the phone appear here…")
+            opacity: 0.6
         }
     }
 }
