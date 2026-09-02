@@ -1,0 +1,23 @@
+{
+    "$schema": "../kdeconnect.schema.json",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "jarvis@local",
+                "Name": "Jarvis / Tailscale integration"
+            }
+        ],
+        "Description": "Reach the phone over Tailscale and control the VPN. Stores the Tailscale IP so the device is always found without re-pairing.",
+        "EnabledByDefault": true,
+        "Icon": "network-vpn",
+        "License": "GPL",
+        "Name": "Tailscale",
+        "Id": "kdeconnect_tailscale"
+    },
+    "X-KdeConnect-OutgoingPacketType": [
+        "kdeconnect.tailscale"
+    ],
+    "X-KdeConnect-SupportedPacketType": [
+        "kdeconnect.tailscale"
+    ]
+}
