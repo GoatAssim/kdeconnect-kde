@@ -150,6 +150,18 @@ void CallBridgePlugin::listContacts(const QString &query)
 {
     sendAction(QStringLiteral("contacts.list"), {{QStringLiteral("query"), query}});
 }
+void CallBridgePlugin::listSims()
+{
+    sendAction(QStringLiteral("sims.list"));
+}
 
+void CallBridgePlugin::dial(const QString &number, int subscriptionId)
+{
+    QVariantMap extra;
+    extra.insert(QStringLiteral("number"), number);
+    if (subscriptionId > 0)
+        extra.insert(QStringLiteral("subscriptionId"), subscriptionId);
+    sendAction(QStringLiteral("dial"), extra);
+}
 #include "callbridgeplugin.moc"
 #include "moc_callbridgeplugin.cpp"

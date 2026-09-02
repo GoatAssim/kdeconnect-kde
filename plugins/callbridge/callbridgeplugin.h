@@ -34,6 +34,8 @@ public Q_SLOTS:
     Q_SCRIPTABLE void dial(const QString &number);
     Q_SCRIPTABLE void requestStatus();
     Q_SCRIPTABLE void listContacts(const QString &query = QString());
+    Q_SCRIPTABLE void listSims();
+    Q_SCRIPTABLE void dial(const QString &number, int subscriptionId = -1);
 
 Q_SIGNALS:
     void responseReceived(const QString &action, const QString &jsonBody, const QString &error);
