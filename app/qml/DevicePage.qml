@@ -294,6 +294,8 @@ Kirigami.ScrollablePage {
                 pluginName: "callbridge"
                 section: "control"
                 device: root.currentDevice
+                // If the PC plugin isn't actually loaded, keep the row from acting broken:
+                hidden: false
             }
 
         ]
