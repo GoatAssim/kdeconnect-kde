@@ -31,12 +31,10 @@ public Q_SLOTS:
     Q_SCRIPTABLE void unmuteMic();
     Q_SCRIPTABLE void speakerOn();
     Q_SCRIPTABLE void speakerOff();
-
     Q_SCRIPTABLE void requestStatus();
-    Q_SCRIPTABLE void listContacts(const QString &query = QString());
+    Q_SCRIPTABLE void listContacts(const QString &query);
     Q_SCRIPTABLE void listSims();
-    Q_SCRIPTABLE void dial(const QString &number, int subscriptionId = -1);
-
+    Q_SCRIPTABLE void dial(const QString &number, int subscriptionId);
 Q_SIGNALS:
     void responseReceived(const QString &action, const QString &jsonBody, const QString &error);
     void callEvent(const QString &event, const QString &number, const QString &contactName, const QString &photoBase64, const QString &simLabel);

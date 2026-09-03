@@ -21,7 +21,7 @@ void CallBridgePlugin::receivePacket(const NetworkPacket &np)
 
     const QString action = np.get<QString>(QStringLiteral("action"));
 
-    // ONLY real call events — never contacts/sims replies
+    // Only true call-state events (never contacts / sims / dial replies)
     if (action == QLatin1String("event")) {
         handleIncomingEvent(np);
         return;
@@ -31,6 +31,7 @@ void CallBridgePlugin::receivePacket(const NetworkPacket &np)
     const QString body = np.get<QString>(QStringLiteral("body"));
     Q_EMIT responseReceived(action, body, error);
 }
+
 void CallBridgePlugin::handleIncomingEvent(const NetworkPacket &np)
 {
     if (np.get<bool>(QStringLiteral("isCancel"))) {
@@ -45,7 +46,6 @@ void CallBridgePlugin::handleIncomingEvent(const NetworkPacket &np)
     const QString name = np.get<QString>(QStringLiteral("contactName"), number);
     const QByteArray thumb = QByteArray::fromBase64(np.get<QByteArray>(QStringLiteral("phoneThumbnail")));
 
-    // SIM info from phone
     const QString simName = np.get<QString>(QStringLiteral("simName"));
     const QString simCarrier = np.get<QString>(QStringLiteral("simCarrier"));
     const int simSlot = np.get<int>(QStringLiteral("simSlot"), -1);
@@ -117,7 +117,7 @@ void CallBridgePlugin::sendAction(const QString &action, const QVariantMap &extr
     for (auto it = extra.constBegin(); it != extra.constEnd(); ++it)
         np.set(it.key(), it.value());
     if (!sendPacket(np))
-        Q_EMIT responseReceived(action, QString(), QStringLiteral("Failed to send packet"));
+        Q_EMIT responseReceived(action, QString(), QStringLiteral("Failed to send packet (device offline?)"));
 }
 
 void CallBridgePlugin::answer()
@@ -165,6 +165,7 @@ void CallBridgePlugin::listContacts(const QString &query)
 {
     sendAction(QStringLiteral("contacts.list"), {{QStringLiteral("query"), query}});
 }
+
 void CallBridgePlugin::listSims()
 {
     sendAction(QStringLiteral("sims.list"));
@@ -174,9 +175,9 @@ void CallBridgePlugin::dial(const QString &number, int subscriptionId)
 {
     QVariantMap extra;
     extra.insert(QStringLiteral("number"), number);
-    if (subscriptionId > 0)
-        extra.insert(QStringLiteral("subscriptionId"), subscriptionId);
+    extra.insert(QStringLiteral("subscriptionId"), subscriptionId);
     sendAction(QStringLiteral("dial"), extra);
 }
+
 #include "callbridgeplugin.moc"
 #include "moc_callbridgeplugin.cpp"
