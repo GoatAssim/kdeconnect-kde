@@ -25,6 +25,26 @@ Kirigami.ScrollablePage {
 
     ListModel { id: contactModel }
     ListModel { id: simModel }
+    ListModel { id: sourceModel }
+
+    // Empty == show all sources. Otherwise only contacts whose "source" key
+    // is in this list are shown. Built generically from whatever sources
+    // the phone actually reports — nothing here is hardcoded to Google/SIM/etc.
+    property var activeSourceFilters: []
+
+    function toggleSourceFilter(key) {
+        const idx = root.activeSourceFilters.indexOf(key)
+        let filters = root.activeSourceFilters.slice()
+        if (idx === -1)
+            filters.push(key)
+        else
+            filters.splice(idx, 1)
+        root.activeSourceFilters = filters
+    }
+
+    function contactVisible(source) {
+        return root.activeSourceFilters.length === 0 || root.activeSourceFilters.indexOf(source) !== -1
+    }
 
     function refreshMeta() {
         console.log("[callbridge QML DEBUG] refreshMeta called, pluginInterface=", root.pluginInterface)
@@ -105,12 +125,40 @@ Kirigami.ScrollablePage {
 
             if (obj.contacts) {
                 contactModel.clear()
+
+                // Collect distinct sources as we go, generically — whatever keys/labels
+                // the phone sends (google, sim, phone, or any other account type) become
+                // filter options, with no fixed list baked in here.
+                const seenSources = {}
+                const distinctSources = []
+
                 for (let i = 0; i < obj.contacts.length; i++) {
+                    const c = obj.contacts[i]
+                    const sourceKey = c.source && c.source.length ? c.source : "phone"
+                    const sourceLabel = c.sourceLabel && c.sourceLabel.length ? c.sourceLabel : "Phone"
+
                     contactModel.append({
-                        roleName: obj.contacts[i].name || "",
-                        roleNumber: obj.contacts[i].number || ""
+                        roleName: c.name || "",
+                        roleNumber: c.number || "",
+                        roleSource: sourceKey,
+                        roleSourceLabel: sourceLabel
                     })
+
+                    if (!seenSources[sourceKey]) {
+                        seenSources[sourceKey] = true
+                        distinctSources.push({ key: sourceKey, label: sourceLabel })
+                    }
                 }
+
+                distinctSources.sort(function(a, b) { return a.label.localeCompare(b.label) })
+                sourceModel.clear()
+                for (let i = 0; i < distinctSources.length; i++) {
+                    sourceModel.append({ roleKey: distinctSources[i].key, roleLabel: distinctSources[i].label })
+                }
+
+                // Drop any active filter that no longer matches a loaded source
+                root.activeSourceFilters = root.activeSourceFilters.filter(function(k) { return seenSources[k] === true })
+
                 root.statusText = "Contacts loaded: " + contactModel.count
                     + (obj.error ? (" (" + obj.error + ")") : "")
             }
@@ -489,6 +537,36 @@ Kirigami.ScrollablePage {
             }
         }
 
+        Flow {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            visible: sourceModel.count > 1
+
+            QQC2.Label {
+                text: i18nd("kdeconnect-app", "Source:")
+                opacity: 0.7
+            }
+
+            Repeater {
+                id: sourceChipRepeater
+                model: sourceModel
+                delegate: Kirigami.Chip {
+                    text: model.roleLabel
+                    checkable: true
+                    closable: false
+                    checked: root.activeSourceFilters.indexOf(model.roleKey) !== -1
+                    onClicked: root.toggleSourceFilter(model.roleKey)
+                }
+            }
+
+            QQC2.Button {
+                text: i18nd("kdeconnect-app", "Clear filter")
+                flat: true
+                visible: root.activeSourceFilters.length > 0
+                onClicked: root.activeSourceFilters = []
+            }
+        }
+
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 0
@@ -496,6 +574,7 @@ Kirigami.ScrollablePage {
                 model: contactModel
                 delegate: QQC2.ItemDelegate {
                     Layout.fillWidth: true
+                    visible: root.contactVisible(model.roleSource)
                     onClicked: numberField.text = model.roleNumber
                     onDoubleClicked: root.placeCall(model.roleNumber)
                     contentItem: RowLayout {
@@ -513,7 +592,7 @@ Kirigami.ScrollablePage {
                                 elide: Text.ElideRight
                             }
                             QQC2.Label {
-                                text: model.roleNumber
+                                text: model.roleNumber + (model.roleSourceLabel.length ? ("   ·   " + model.roleSourceLabel) : "")
                                 opacity: 0.7
                                 font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                                 Layout.fillWidth: true
