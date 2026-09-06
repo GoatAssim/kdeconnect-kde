@@ -282,9 +282,12 @@ class KDECONNECTDBUSINTERFACES_EXPORT CallBridgeDbusInterface : public OrgKdeKde
     Q_OBJECT
 public:
     explicit CallBridgeDbusInterface(const QString &deviceId, QObject *parent = nullptr);
-
-Q_SIGNALS:
-    void responseReceived(const QString &action, const QString &jsonBody, const QString &error);
-    void callEvent(const QString &event, const QString &number, const QString &contactName, const QString &photoBase64, const QString &simLabel);
+    // Note: responseReceived and callEvent are inherited directly from
+    // OrgKdeKdeconnectDeviceCallbridgeInterface (auto-generated from
+    // callbridgeplugin.h). Do NOT re-declare them here: a same-named
+    // Q_SIGNALS re-declaration in this subclass shadows the base class's
+    // real, D-Bus-driven signal, so any connect() using this class's own
+    // name would silently bind to a signal nothing ever emits. QML's
+    // Connections{} binds to inherited signals fine without any of this.
 };
 #endif
