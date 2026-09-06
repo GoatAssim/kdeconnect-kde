@@ -20,6 +20,7 @@ Kirigami.ScrollablePage {
     ListModel { id: simModel }
 
     function refreshMeta() {
+        console.log("[callbridge QML DEBUG] refreshMeta called, pluginInterface=", root.pluginInterface)
         if (!root.pluginInterface) {
             root.statusText = "No pluginInterface (plugin not loaded on PC or not paired)."
             return
@@ -28,12 +29,16 @@ Kirigami.ScrollablePage {
         root.pluginInterface.listContacts("")
     }
 
-    Component.onCompleted: refreshMeta()
+    Component.onCompleted: {
+        console.log("[callbridge QML DEBUG] onCompleted, pluginInterface=", root.pluginInterface)
+        refreshMeta()
+    }
 
     Connections {
         target: root.pluginInterface
 
         function onCallEvent(event, number, contactName, photoBase64, simLabel) {
+            console.log("[callbridge QML DEBUG] onCallEvent fired", event, number)
             root.callEvent = event
             root.callNumber = number || ""
             root.callName = contactName || number || ""
@@ -43,6 +48,7 @@ Kirigami.ScrollablePage {
         }
 
         function onResponseReceived(action, jsonBody, error) {
+            console.log("[callbridge QML DEBUG] onResponseReceived fired", action, "bodyLen=", jsonBody ? jsonBody.length : -1, "error=", error)
             if (error && error.length) {
                 root.statusText = action + " ERROR: " + error
                 return
