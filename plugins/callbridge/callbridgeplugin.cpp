@@ -8,6 +8,7 @@
 #include <KLocalizedString>
 #include <KNotification>
 #include <KPluginFactory>
+#include <QDebug>
 #include <QPixmap>
 
 #include <core/device.h>
@@ -20,6 +21,7 @@ void CallBridgePlugin::receivePacket(const NetworkPacket &np)
         return;
 
     const QString action = np.get<QString>(QStringLiteral("action"));
+    qWarning() << "[callbridge DEBUG] receivePacket action=" << action;
 
     // Only true call-state events (never contacts / sims / dial replies)
     if (action == QLatin1String("event")) {
@@ -29,11 +31,15 @@ void CallBridgePlugin::receivePacket(const NetworkPacket &np)
 
     const QString error = np.get<QString>(QStringLiteral("error"));
     const QString body = np.get<QString>(QStringLiteral("body"));
+    qWarning() << "[callbridge DEBUG] response action=" << action << "error=" << error << "bodyLen=" << body.length();
     Q_EMIT responseReceived(action, body, error);
 }
 
 void CallBridgePlugin::handleIncomingEvent(const NetworkPacket &np)
 {
+    qWarning() << "[callbridge DEBUG] handleIncomingEvent isCancel=" << np.get<bool>(QStringLiteral("isCancel"))
+               << "event=" << np.get<QString>(QStringLiteral("event")) << "number=" << np.get<QString>(QStringLiteral("phoneNumber"));
+
     if (np.get<bool>(QStringLiteral("isCancel"))) {
         if (m_callNotification)
             m_callNotification->close();
