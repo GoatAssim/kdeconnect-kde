@@ -36,8 +36,8 @@ public Q_SLOTS:
     Q_SCRIPTABLE void listSims();
     Q_SCRIPTABLE void dial(const QString &number, int subscriptionId);
 Q_SIGNALS:
-    void responseReceived(const QString &action, const QString &jsonBody, const QString &error);
-    void callEvent(const QString &event, const QString &number, const QString &contactName, const QString &photoBase64, const QString &simLabel);
+    Q_SCRIPTABLE void responseReceived(const QString &action, const QString &jsonBody, const QString &error);
+    Q_SCRIPTABLE void callEvent(const QString &event, const QString &number, const QString &contactName, const QString &photoBase64, const QString &simLabel);
 
 private:
     void sendAction(const QString &action, const QVariantMap &extra = {});
