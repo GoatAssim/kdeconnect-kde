@@ -285,6 +285,6 @@ public:
 
 Q_SIGNALS:
     void responseReceived(const QString &action, const QString &jsonBody, const QString &error);
-    void callEvent(const QString &event, const QString &number, const QString &contactName, const QString &photoBase64);
+    void callEvent(const QString &event, const QString &number, const QString &contactName, const QString &photoBase64, const QString &simLabel);
 };
 #endif

@@ -220,6 +220,6 @@ CallBridgeDbusInterface::CallBridgeDbusInterface(const QString &id, QObject *par
                                                 parent)
 {
     connect(this, SIGNAL(responseReceived(QString, QString, QString)), this, SIGNAL(responseReceived(QString, QString, QString)));
-    connect(this, SIGNAL(callEvent(QString, QString, QString, QString)), this, SIGNAL(callEvent(QString, QString, QString, QString)));
+    connect(this, SIGNAL(callEvent(QString, QString, QString, QString, QString)), this, SIGNAL(callEvent(QString, QString, QString, QString, QString)));
 }
 #include "moc_dbusinterfaces.cpp"
