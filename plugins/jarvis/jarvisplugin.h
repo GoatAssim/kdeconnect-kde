@@ -56,6 +56,7 @@ private:
     void handleAsk(const NetworkPacket &np);
     void handleCancel(const QString &kind = QString());
     void handleAiClear();
+    void handleAskConfirmResponse(const NetworkPacket &np);
     void fetchScreenshot(const QString &filename);
     QString ensureConversationId();
 

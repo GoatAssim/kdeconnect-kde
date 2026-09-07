@@ -332,6 +332,10 @@ void JarvisPlugin::receivePacket(const NetworkPacket &np)
         handleAiClear();
         return;
     }
+    if (action == QLatin1String("askConfirmResponse")) {
+        handleAskConfirmResponse(np);
+        return;
+    }
 }
 
 void JarvisPlugin::sendStatus(const QString &error)
@@ -618,6 +622,23 @@ void JarvisPlugin::handleCancel(const QString &kind)
     m_ws.sendTextMessage(QString::fromUtf8(QJsonDocument(msg).toJson(QJsonDocument::Compact)));
 }
 
+void JarvisPlugin::handleAskConfirmResponse(const NetworkPacket &np)
+{
+    // Relay the phone's Yes/No straight to jarvis-web, exactly like the
+    // browser's "ask-confirm-response" (see web/public/app.js's
+    // addAskConfirmBubble / wsSend). server.js writes this straight to the
+    // blocked `jarvis` child's stdin (cli.py's on_confirm_request is
+    // sitting on a synchronous readline() right now), so until this is
+    // sent the ask genuinely cannot proceed on either device.
+    if (m_ws.state() != QAbstractSocket::ConnectedState) {
+        return;
+    }
+    QJsonObject msg;
+    msg.insert(QStringLiteral("type"), QStringLiteral("ask-confirm-response"));
+    msg.insert(QStringLiteral("approved"), np.get<bool>(QStringLiteral("approved")));
+    m_ws.sendTextMessage(QString::fromUtf8(QJsonDocument(msg).toJson(QJsonDocument::Compact)));
+}
+
 void JarvisPlugin::handleAiClear()
 {
     int status = 0;
@@ -709,6 +730,26 @@ void JarvisPlugin::onWsTextMessage(const QString &message)
             sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), obj.value(QStringLiteral("message")).toString()}});
         }
         sendPacketType(QStringLiteral("askExit"), {{QStringLiteral("id"), m_askId}, {QStringLiteral("code"), obj.value(QStringLiteral("code")).toInt()}});
+    }
+    if (type == QLatin1String("ask-confirm-request")) {
+        // A tool flagged confirm_required (see jarvis-cli/jarvis/tool_safety.py)
+        // has paused the running ask. Forward it to the phone as its own
+        // packet — never folded into askStdout — so the mobile UI can show
+        // it as its own distinct confirmation bubble with Yes/No buttons,
+        // same as the browser's addAskConfirmBubble.
+        const QJsonObject arguments = obj.value(QStringLiteral("arguments")).toObject();
+        const QJsonObject riskNote = obj.value(QStringLiteral("risk_note")).toObject();
+        QVariantMap extra{
+            {QStringLiteral("id"), m_askId},
+            {QStringLiteral("tool"), obj.value(QStringLiteral("tool")).toString()},
+            {QStringLiteral("argumentsJson"), QString::fromUtf8(QJsonDocument(arguments).toJson(QJsonDocument::Compact))},
+        };
+        if (!riskNote.isEmpty()) {
+            extra.insert(QStringLiteral("riskProvider"), riskNote.value(QStringLiteral("provider")).toString());
+            extra.insert(QStringLiteral("riskNote"), riskNote.value(QStringLiteral("note")).toString());
+        }
+        sendPacketType(QStringLiteral("askConfirmRequest"), extra);
+        return;
     }
 }
 
