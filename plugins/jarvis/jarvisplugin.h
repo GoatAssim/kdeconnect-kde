@@ -57,6 +57,7 @@ private:
     void handleCancel(const QString &kind = QString());
     void handleAiClear();
     void fetchScreenshot(const QString &filename);
+    QString ensureConversationId();
 
     QNetworkAccessManager m_nam;
     QWebSocket m_ws;
@@ -65,6 +66,7 @@ private:
     int m_runId = 0;
     int m_askId = 0;
     QString m_activeKind;
+    QString m_conversationId;
 
 private Q_SLOTS:
     void onWsTextMessage(const QString &message);

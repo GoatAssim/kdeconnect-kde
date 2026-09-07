@@ -404,6 +404,50 @@ QString JarvisPlugin::allowedToolsEnv() const
     return names.join(QLatin1Char(','));
 }
 
+QString JarvisPlugin::ensureConversationId()
+{
+    if (!m_conversationId.isEmpty()) {
+        return m_conversationId;
+    }
+
+    // jarvis-cli's on-disk "current conversation" pointer (see
+    // conversations.py::get_current_id / set_current) is a single global
+    // file, not per-caller. The web UI never relies on it - it creates its
+    // own conversation per browser tab and passes that id on every ask -
+    // but this plugin used to send asks with no id at all, so every phone
+    // request silently fell back to whatever conversation was "current".
+    // That pointer gets rewritten every time a browser tab opens a fresh
+    // chat (conv-new marks itself current) and can even be deleted out
+    // from under us (conv-delete clears the pointer if it pointed at the
+    // conversation being deleted), so phone conversations kept randomly
+    // losing history or ending up interleaved with whatever the desktop
+    // browser was doing. Giving this plugin its own persisted
+    // conversation id — created once via POST /api/conversations and
+    // cached in the plugin config — makes phone chats independent of
+    // the browser and of each other, the same way each browser tab
+    // already is.
+    static const QRegularExpression idRe(QStringLiteral("^[a-f0-9]{8,64}$"));
+    const QString stored = config()->getString(QStringLiteral("conversationId"), QString());
+    if (idRe.match(stored).hasMatch()) {
+        m_conversationId = stored;
+        return m_conversationId;
+    }
+
+    int status = 0;
+    QString error;
+    QJsonObject body;
+    body.insert(QStringLiteral("title"), QStringLiteral("KDE Connect"));
+    const QJsonDocument doc = httpJson("POST", QStringLiteral("/api/conversations"), body, &status, &error);
+    const QString newId = doc.object().value(QStringLiteral("id")).toString();
+    if (idRe.match(newId).hasMatch()) {
+        m_conversationId = newId;
+        config()->set(QStringLiteral("conversationId"), m_conversationId);
+    } else {
+        qCWarning(KDECONNECT_PLUGIN_JARVIS) << "Couldn't create/reuse a Jarvis conversation for this device:" << error;
+    }
+    return m_conversationId;
+}
+
 QString JarvisPlugin::configApiPath(const QString &which) const
 {
     if (which == QLatin1String("commands")) {
@@ -554,6 +598,10 @@ void JarvisPlugin::handleAsk(const NetworkPacket &np)
     msg.insert(QStringLiteral("type"), QStringLiteral("ask"));
     msg.insert(QStringLiteral("text"), np.get<QString>(QStringLiteral("text")));
     msg.insert(QStringLiteral("allowedTools"), allowedToolsEnv());
+    const QString conversationId = ensureConversationId();
+    if (!conversationId.isEmpty()) {
+        msg.insert(QStringLiteral("conversationId"), conversationId);
+    }
     m_ws.sendTextMessage(QString::fromUtf8(QJsonDocument(msg).toJson(QJsonDocument::Compact)));
 }
 
@@ -574,7 +622,12 @@ void JarvisPlugin::handleAiClear()
 {
     int status = 0;
     QString error;
-    httpJson("POST", QStringLiteral("/api/ai/clear"), QJsonObject(), &status, &error);
+    QJsonObject body;
+    const QString conversationId = ensureConversationId();
+    if (!conversationId.isEmpty()) {
+        body.insert(QStringLiteral("conversationId"), conversationId);
+    }
+    httpJson("POST", QStringLiteral("/api/ai/clear"), body, &status, &error);
     if (!error.isEmpty()) {
         sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), error}});
         return;
