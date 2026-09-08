@@ -10,10 +10,12 @@
 #include <QJsonDocument>
 #include <QJsonValue>
 #include <QNetworkAccessManager>
+#include <QPair>
 #include <QPointer>
 #include <QProcess>
 #include <QString>
 #include <QUrl>
+#include <QVector>
 #include <QWebSocket>
 
 #include <core/kdeconnectplugin.h>
@@ -60,6 +62,25 @@ private:
     void handleAskConfirmResponse(const NetworkPacket &np);
     void fetchScreenshot(const QString &filename);
     QString ensureConversationId();
+    // Reveal in Explorer / Open location / Open file for a path the phone
+    // spotted in Jarvis's own reply (see collectFileActionCandidates) —
+    // proxied through the same /api/tools/run endpoint the web debug
+    // dashboard's buttons use (jarvis-cli/jarvis/everything_tools.py's
+    // reveal_in_explorer / open_file_location / open_file), so the actual
+    // Explorer/OS logic lives in exactly one place.
+    void handleFileAction(const NetworkPacket &np);
+    // Scans one line of the assistant's streaming reply for absolute
+    // Windows paths and, for any that actually exist on this PC (checked
+    // right here with QFileInfo — no need to round-trip through Everything
+    // for that), remembers it for sendCollectedFileActions().
+    void collectFileActionCandidates(const QString &line);
+    // Flushes whatever collectFileActionCandidates gathered during the
+    // just-finished ask turn to the phone as one askFileActions packet, so
+    // it can offer Reveal/Open buttons under the reply — mirrors the web
+    // UI's JARVIS_MEDIA-driven file action buttons, but sourced from the
+    // reply text itself rather than requiring jarvis-cli to emit anything
+    // new, since this plugin already sees every line of that reply anyway.
+    void sendCollectedFileActions();
 
     QNetworkAccessManager m_nam;
     QWebSocket m_ws;
@@ -69,6 +90,9 @@ private:
     int m_askId = 0;
     QString m_activeKind;
     QString m_conversationId;
+    // (path, isFolder) pairs found in the current ask turn's reply so far —
+    // reset at the start of every new ask, flushed at the end of it.
+    QVector<QPair<QString, bool>> m_askFilePaths;
 
 private Q_SLOTS:
     void onWsTextMessage(const QString &message);

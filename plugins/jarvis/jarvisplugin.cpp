@@ -12,6 +12,8 @@
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
+#include <QFileInfo>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -86,6 +88,34 @@ QString findOnPath(const QString &name)
 QString encodePathSegment(const QString &name)
 {
     return QString::fromUtf8(QUrl::toPercentEncoding(name));
+}
+
+// Absolute Windows paths mentioned in the assistant's reply text, e.g. when
+// it reports a search_files match or a screenshot's save location. Doesn't
+// try to be a general-purpose path grammar — no UNC/quoted-space handling —
+// just enough to catch the plain "C:\Users\...\file.txt" shape jarvis-cli's
+// tools already produce, matching everything_tools.py's own comment that
+// Everything imposes no path-length cap (buffer generously, don't get cute
+// with the regex). Trailing sentence punctuation a chat reply tends to glue
+// on ("...file.txt.", "(file.txt)") is trimmed off after the match.
+QStringList extractCandidatePaths(const QString &text)
+{
+    static const QRegularExpression re(QStringLiteral(R"(\b[A-Za-z]:\\(?:[^\\/:*?"<>|\r\n]+\\)*[^\\/:*?"<>|\r\n]+)"));
+    QStringList out;
+    auto it = re.globalMatch(text);
+    while (it.hasNext()) {
+        QString m = it.next().captured(0);
+        while (!m.isEmpty() && QStringLiteral(".,)\"'`:;]").contains(m.back())) {
+            m.chop(1);
+        }
+        while (!m.isEmpty() && QStringLiteral("(\"'`[").contains(m.front())) {
+            m.remove(0, 1);
+        }
+        if (!m.isEmpty()) {
+            out << m;
+        }
+    }
+    return out;
 }
 }
 
@@ -338,6 +368,10 @@ void JarvisPlugin::receivePacket(const NetworkPacket &np)
     }
     if (action == QLatin1String("askConfirmResponse")) {
         handleAskConfirmResponse(np);
+        return;
+    }
+    if (action == QLatin1String("fileAction")) {
+        handleFileAction(np);
         return;
     }
 }
@@ -612,6 +646,7 @@ void JarvisPlugin::handleAsk(const NetworkPacket &np)
     }
     m_askId = static_cast<int>(np.get<qlonglong>(QStringLiteral("id")));
     m_activeKind = QStringLiteral("ask");
+    m_askFilePaths.clear();
     QJsonObject msg;
     msg.insert(QStringLiteral("type"), QStringLiteral("ask"));
     msg.insert(QStringLiteral("text"), np.get<QString>(QStringLiteral("text")));
@@ -670,6 +705,105 @@ void JarvisPlugin::handleAiClear()
     sendPacketType(QStringLiteral("ok"), {{QStringLiteral("action"), QStringLiteral("aiClear")}});
 }
 
+void JarvisPlugin::handleFileAction(const NetworkPacket &np)
+{
+    // Reveal in Explorer / Open location / Open file, requested from a
+    // button on the phone against a path it was offered in
+    // sendCollectedFileActions() below. Proxied to jarvis-web's generic
+    // /api/tools/run — the exact same endpoint the browser's debug
+    // dashboard calls (see web/public/app.js's debugFileActionButtons) —
+    // so this plugin never has to know how to talk to Explorer itself.
+    const QString path = np.get<QString>(QStringLiteral("path"));
+    const QString kind = np.get<QString>(QStringLiteral("fileAction"));
+    static const QHash<QString, QString> toolByKind{
+        {QStringLiteral("reveal"), QStringLiteral("reveal_in_explorer")},
+        {QStringLiteral("openLocation"), QStringLiteral("open_file_location")},
+        {QStringLiteral("openFile"), QStringLiteral("open_file")},
+    };
+    const QString tool = toolByKind.value(kind);
+    if (path.isEmpty() || tool.isEmpty()) {
+        sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), QStringLiteral("Unknown file action.")}});
+        return;
+    }
+
+    QJsonObject arguments;
+    arguments.insert(QStringLiteral("path"), path);
+    QJsonObject body;
+    body.insert(QStringLiteral("name"), tool);
+    body.insert(QStringLiteral("arguments"), arguments);
+
+    int status = 0;
+    QString error;
+    const QJsonDocument doc = httpJson("POST", QStringLiteral("/api/tools/run"), body, &status, &error);
+    // /api/tools/run always answers 200 with {result: {...}} even when the
+    // tool itself failed (Windows-only guard, path vanished, etc.) — the
+    // real success/failure lives inside result, not the HTTP status.
+    const QString resultError = doc.object().value(QStringLiteral("result")).toObject().value(QStringLiteral("error")).toString();
+    if (!error.isEmpty() || !resultError.isEmpty()) {
+        sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), !resultError.isEmpty() ? resultError : error}});
+        return;
+    }
+    sendPacketType(QStringLiteral("ok"),
+                   {
+                       {QStringLiteral("action"), QStringLiteral("fileAction")},
+                       {QStringLiteral("fileAction"), kind},
+                       {QStringLiteral("path"), path},
+                   });
+}
+
+void JarvisPlugin::collectFileActionCandidates(const QString &line)
+{
+    static constexpr int kMaxPerTurn = 20; // keep the eventual phone bubble scrollable, not a wall of buttons
+    if (m_askFilePaths.size() >= kMaxPerTurn) {
+        return;
+    }
+    for (const QString &candidate : extractCandidatePaths(line)) {
+        if (m_askFilePaths.size() >= kMaxPerTurn) {
+            return;
+        }
+        bool alreadySeen = false;
+        for (const auto &existing : std::as_const(m_askFilePaths)) {
+            if (existing.first.compare(candidate, Qt::CaseInsensitive) == 0) {
+                alreadySeen = true;
+                break;
+            }
+        }
+        if (alreadySeen) {
+            continue;
+        }
+        // A path mentioned in prose is worthless as a button target unless
+        // it's real right now — checked directly against this PC's
+        // filesystem since the plugin already runs on it, no need to ask
+        // Everything or jarvis-web to confirm what QFileInfo can answer
+        // in-process.
+        const QFileInfo info(candidate);
+        if (!info.exists()) {
+            continue;
+        }
+        m_askFilePaths.append({candidate, info.isDir()});
+    }
+}
+
+void JarvisPlugin::sendCollectedFileActions()
+{
+    if (m_askFilePaths.isEmpty()) {
+        return;
+    }
+    QJsonArray arr;
+    for (const auto &entry : std::as_const(m_askFilePaths)) {
+        QJsonObject item;
+        item.insert(QStringLiteral("path"), entry.first);
+        item.insert(QStringLiteral("isFolder"), entry.second);
+        arr.append(item);
+    }
+    sendPacketType(QStringLiteral("askFileActions"),
+                   {
+                       {QStringLiteral("id"), m_askId},
+                       {QStringLiteral("pathsJson"), QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))},
+                   });
+    m_askFilePaths.clear();
+}
+
 void JarvisPlugin::fetchScreenshot(const QString &filename)
 {
     static const QRegularExpression valid(QStringLiteral("^ss_[A-Za-z0-9_.-]+\\.png$"));
@@ -725,7 +859,9 @@ void JarvisPlugin::onWsTextMessage(const QString &message)
         return;
     }
     if (type == QLatin1String("ask-stdout")) {
-        sendPacketType(QStringLiteral("askStdout"), {{QStringLiteral("id"), m_askId}, {QStringLiteral("line"), obj.value(QStringLiteral("line")).toString()}});
+        const QString line = obj.value(QStringLiteral("line")).toString();
+        sendPacketType(QStringLiteral("askStdout"), {{QStringLiteral("id"), m_askId}, {QStringLiteral("line"), line}});
+        collectFileActionCandidates(line);
         return;
     }
     if (type == QLatin1String("ask-stderr")) {
@@ -743,6 +879,7 @@ void JarvisPlugin::onWsTextMessage(const QString &message)
         if (type == QLatin1String("ask-error")) {
             sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), obj.value(QStringLiteral("message")).toString()}});
         }
+        sendCollectedFileActions();
         sendPacketType(QStringLiteral("askExit"), {{QStringLiteral("id"), m_askId}, {QStringLiteral("code"), obj.value(QStringLiteral("code")).toInt()}});
     }
     if (type == QLatin1String("ask-confirm-request")) {
