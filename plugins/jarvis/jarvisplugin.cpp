@@ -308,6 +308,10 @@ void JarvisPlugin::receivePacket(const NetworkPacket &np)
         handleDeleteCommand(np);
         return;
     }
+    if (action == QLatin1String("getConfigList")) {
+        handleGetConfigList();
+        return;
+    }
     if (action == QLatin1String("getConfig")) {
         handleGetConfig(np);
         return;
@@ -454,24 +458,32 @@ QString JarvisPlugin::ensureConversationId()
 
 QString JarvisPlugin::configApiPath(const QString &which) const
 {
-    // The web UI's config editor moved to a single generic
-    // "/api/config/file/<name>/raw" endpoint keyed by the actual filename in
-    // the jarvis config dir (see server.js's KNOWN_CONFIGS), replacing the
-    // old one-off "/api/raw", "/api/ai/raw", etc. routes those no longer
-    // exist server-side. Map each short "which" tab id used over the wire
-    // with the phone to the config filename it corresponds to.
-    static const QHash<QString, QString> filenames = {
-        {QStringLiteral("commands"), QStringLiteral("commands.json")},
-        {QStringLiteral("ai"), QStringLiteral("ai_config.json")},
-        {QStringLiteral("playnite"), QStringLiteral("playnite.json")},
-        {QStringLiteral("spotify"), QStringLiteral("spotify.json")},
-        {QStringLiteral("memory"), QStringLiteral("memory.json")},
-    };
-    const QString filename = filenames.value(which);
-    if (filename.isEmpty()) {
+    // Generic like the web UI: "which" is now the actual config filename
+    // (e.g. "ai_config.json"), discovered from GET /api/config/list rather
+    // than picked from a hardcoded set of tabs, and passed straight through
+    // to GET/PUT /api/config/file/<name>/raw (see server.js's KNOWN_CONFIGS
+    // / generic config-file browser). The server itself still refuses
+    // anything that isn't a plain "<name>.json" living directly in the
+    // config dir, so this stays a thin pass-through rather than
+    // re-validating the name here too.
+    if (which.isEmpty()) {
         return {};
     }
-    return QStringLiteral("/api/config/file/") + encodePathSegment(filename) + QStringLiteral("/raw");
+    return QStringLiteral("/api/config/file/") + encodePathSegment(which) + QStringLiteral("/raw");
+}
+
+void JarvisPlugin::handleGetConfigList()
+{
+    int status = 0;
+    QString error;
+    const QJsonDocument doc = httpJson("GET", QStringLiteral("/api/config/list"), {}, &status, &error);
+    QJsonArray files = doc.isObject() ? doc.object().value(QStringLiteral("files")).toArray() : QJsonArray();
+    const QString json = QString::fromUtf8(QJsonDocument(files).toJson(QJsonDocument::Compact));
+    sendPacketType(QStringLiteral("configList"),
+                   {
+                       {QStringLiteral("filesJson"), json},
+                       {QStringLiteral("error"), error},
+                   });
 }
 
 void JarvisPlugin::handleCreateCommand(const NetworkPacket &np)
@@ -562,7 +574,7 @@ void JarvisPlugin::handleSetConfig(const NetworkPacket &np)
         return;
     }
     sendPacketType(QStringLiteral("ok"), {{QStringLiteral("action"), QStringLiteral("setConfig")}, {QStringLiteral("which"), which}});
-    if (which == QLatin1String("commands")) {
+    if (which == QLatin1String("commands.json")) {
         sendCommands();
     }
 }

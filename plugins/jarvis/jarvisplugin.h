@@ -50,6 +50,7 @@ private:
     void handleCreateCommand(const NetworkPacket &np);
     void handleUpdateCommand(const NetworkPacket &np);
     void handleDeleteCommand(const NetworkPacket &np);
+    void handleGetConfigList();
     void handleGetConfig(const NetworkPacket &np);
     void handleSetConfig(const NetworkPacket &np);
     void handleRun(const NetworkPacket &np);
