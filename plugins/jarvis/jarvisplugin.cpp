@@ -454,22 +454,24 @@ QString JarvisPlugin::ensureConversationId()
 
 QString JarvisPlugin::configApiPath(const QString &which) const
 {
-    if (which == QLatin1String("commands")) {
-        return QStringLiteral("/api/raw");
+    // The web UI's config editor moved to a single generic
+    // "/api/config/file/<name>/raw" endpoint keyed by the actual filename in
+    // the jarvis config dir (see server.js's KNOWN_CONFIGS), replacing the
+    // old one-off "/api/raw", "/api/ai/raw", etc. routes those no longer
+    // exist server-side. Map each short "which" tab id used over the wire
+    // with the phone to the config filename it corresponds to.
+    static const QHash<QString, QString> filenames = {
+        {QStringLiteral("commands"), QStringLiteral("commands.json")},
+        {QStringLiteral("ai"), QStringLiteral("ai_config.json")},
+        {QStringLiteral("playnite"), QStringLiteral("playnite.json")},
+        {QStringLiteral("spotify"), QStringLiteral("spotify.json")},
+        {QStringLiteral("memory"), QStringLiteral("memory.json")},
+    };
+    const QString filename = filenames.value(which);
+    if (filename.isEmpty()) {
+        return {};
     }
-    if (which == QLatin1String("ai")) {
-        return QStringLiteral("/api/ai/raw");
-    }
-    if (which == QLatin1String("playnite")) {
-        return QStringLiteral("/api/playnite/raw");
-    }
-    if (which == QLatin1String("spotify")) {
-        return QStringLiteral("/api/spotify/raw");
-    }
-    if (which == QLatin1String("memory")) {
-        return QStringLiteral("/api/memory/raw");
-    }
-    return {};
+    return QStringLiteral("/api/config/file/") + encodePathSegment(filename) + QStringLiteral("/raw");
 }
 
 void JarvisPlugin::handleCreateCommand(const NetworkPacket &np)
