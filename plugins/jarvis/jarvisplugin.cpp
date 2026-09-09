@@ -32,102 +32,102 @@
 
 namespace
 {
-const QStringList s_fallbackTools = {
-    QStringLiteral("get_datetime"),
-    QStringLiteral("get_battery"),
-    QStringLiteral("get_wifi_info"),
-    QStringLiteral("get_location"),
-    QStringLiteral("get_system_info"),
-    QStringLiteral("get_disk_usage"),
-    QStringLiteral("get_memory_usage"),
-    QStringLiteral("run_command"),
-    QStringLiteral("run_chain"),
-    QStringLiteral("create_command"),
-    QStringLiteral("update_command"),
-    QStringLiteral("take_screenshot"),
-};
-
-QStringList extraSearchDirs()
-{
-    QStringList dirs;
-    const QString home = QDir::homePath();
-    dirs << (home + QStringLiteral("/.local/bin"));
-#ifdef Q_OS_WIN
-    const QString localAppData = QDir::fromNativeSeparators(qEnvironmentVariable("LOCALAPPDATA"));
-    const QString roaming = QDir::fromNativeSeparators(qEnvironmentVariable("APPDATA"));
-    const auto addTree = [&](const QString &root) {
-        QDir d(root);
-        if (!d.exists()) {
-            return;
-        }
-        for (const QString &name : d.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
-            dirs << d.filePath(name + QStringLiteral("/Scripts"));
-            dirs << d.filePath(name);
-        }
+    const QStringList s_fallbackTools = {
+        QStringLiteral("get_datetime"),
+        QStringLiteral("get_battery"),
+        QStringLiteral("get_wifi_info"),
+        QStringLiteral("get_location"),
+        QStringLiteral("get_system_info"),
+        QStringLiteral("get_disk_usage"),
+        QStringLiteral("get_memory_usage"),
+        QStringLiteral("run_command"),
+        QStringLiteral("run_chain"),
+        QStringLiteral("create_command"),
+        QStringLiteral("update_command"),
+        QStringLiteral("take_screenshot"),
     };
-    addTree(roaming + QStringLiteral("/Python"));
-    addTree(localAppData + QStringLiteral("/Programs/Python"));
-    addTree(localAppData + QStringLiteral("/Programs"));
+
+    QStringList extraSearchDirs()
+    {
+        QStringList dirs;
+        const QString home = QDir::homePath();
+        dirs << (home + QStringLiteral("/.local/bin"));
+#ifdef Q_OS_WIN
+        const QString localAppData = QDir::fromNativeSeparators(qEnvironmentVariable("LOCALAPPDATA"));
+        const QString roaming = QDir::fromNativeSeparators(qEnvironmentVariable("APPDATA"));
+        const auto addTree = [&](const QString& root) {
+            QDir d(root);
+            if (!d.exists()) {
+                return;
+            }
+            for (const QString& name : d.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
+                dirs << d.filePath(name + QStringLiteral("/Scripts"));
+                dirs << d.filePath(name);
+            }
+            };
+        addTree(roaming + QStringLiteral("/Python"));
+        addTree(localAppData + QStringLiteral("/Programs/Python"));
+        addTree(localAppData + QStringLiteral("/Programs"));
 #endif
-    dirs.removeDuplicates();
-    return dirs;
-}
-
-QString findOnPath(const QString &name)
-{
-    QString found = QStandardPaths::findExecutable(name, extraSearchDirs());
-    if (found.isEmpty()) {
-        found = QStandardPaths::findExecutable(name);
+        dirs.removeDuplicates();
+        return dirs;
     }
-    if (found.contains(QStringLiteral("WindowsApps"), Qt::CaseInsensitive)) {
-        return {};
-    }
-    return found;
-}
 
-QString encodePathSegment(const QString &name)
-{
-    return QString::fromUtf8(QUrl::toPercentEncoding(name));
-}
-
-// Absolute Windows paths mentioned in the assistant's reply text, e.g. when
-// it reports a search_files match or a screenshot's save location. Doesn't
-// try to be a general-purpose path grammar — no UNC/quoted-space handling —
-// just enough to catch the plain "C:\Users\...\file.txt" shape jarvis-cli's
-// tools already produce, matching everything_tools.py's own comment that
-// Everything imposes no path-length cap (buffer generously, don't get cute
-// with the regex). Trailing sentence punctuation a chat reply tends to glue
-// on ("...file.txt.", "(file.txt)") is trimmed off after the match.
-QStringList extractCandidatePaths(const QString &text)
-{
-    static const QRegularExpression re(QStringLiteral(R"(\b[A-Za-z]:\\(?:[^\\/:*?"<>|\r\n]+\\)*[^\\/:*?"<>|\r\n]+)"));
-    QStringList out;
-    auto it = re.globalMatch(text);
-    while (it.hasNext()) {
-        QString m = it.next().captured(0);
-        while (!m.isEmpty() && QStringLiteral(".,)\"'`:;]").contains(m.back())) {
-            m.chop(1);
+    QString findOnPath(const QString& name)
+    {
+        QString found = QStandardPaths::findExecutable(name, extraSearchDirs());
+        if (found.isEmpty()) {
+            found = QStandardPaths::findExecutable(name);
         }
-        while (!m.isEmpty() && QStringLiteral("(\"'`[").contains(m.front())) {
-            m.remove(0, 1);
+        if (found.contains(QStringLiteral("WindowsApps"), Qt::CaseInsensitive)) {
+            return {};
         }
-        if (!m.isEmpty()) {
-            out << m;
-        }
+        return found;
     }
-    return out;
-}
+
+    QString encodePathSegment(const QString& name)
+    {
+        return QString::fromUtf8(QUrl::toPercentEncoding(name));
+    }
+
+    // Absolute Windows paths mentioned in the assistant's reply text, e.g. when
+    // it reports a search_files match or a screenshot's save location. Doesn't
+    // try to be a general-purpose path grammar — no UNC/quoted-space handling —
+    // just enough to catch the plain "C:\Users\...\file.txt" shape jarvis-cli's
+    // tools already produce, matching everything_tools.py's own comment that
+    // Everything imposes no path-length cap (buffer generously, don't get cute
+    // with the regex). Trailing sentence punctuation a chat reply tends to glue
+    // on ("...file.txt.", "(file.txt)") is trimmed off after the match.
+    QStringList extractCandidatePaths(const QString& text)
+    {
+        static const QRegularExpression re(QStringLiteral(R"(\b[A-Za-z]:\\(?:[^\\/:*?"<>|\r\n]+\\)*[^\\/:*?"<>|\r\n]+)"));
+        QStringList out;
+        auto it = re.globalMatch(text);
+        while (it.hasNext()) {
+            QString m = it.next().captured(0);
+            while (!m.isEmpty() && QStringLiteral(".,)\"'`:;]").contains(m.back())) {
+                m.chop(1);
+            }
+            while (!m.isEmpty() && QStringLiteral("(\"'`[").contains(m.front())) {
+                m.remove(0, 1);
+            }
+            if (!m.isEmpty()) {
+                out << m;
+            }
+        }
+        return out;
+    }
 }
 
 K_PLUGIN_CLASS_WITH_JSON(JarvisPlugin, "kdeconnect_jarvis.json")
 
-JarvisPlugin::JarvisPlugin(QObject *parent, const QVariantList &args)
+JarvisPlugin::JarvisPlugin(QObject* parent, const QVariantList& args)
     : KdeConnectPlugin(parent, args)
 {
     connect(&m_ws, &QWebSocket::textMessageReceived, this, &JarvisPlugin::onWsTextMessage);
     connect(&m_ws, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) {
         onWsError();
-    });
+        });
 }
 
 JarvisPlugin::~JarvisPlugin()
@@ -156,7 +156,7 @@ QUrl JarvisPlugin::wsUrl() const
     return url;
 }
 
-bool JarvisPlugin::pingServer(QString *error)
+bool JarvisPlugin::pingServer(QString* error)
 {
     QByteArray response;
     int status = 0;
@@ -197,7 +197,7 @@ void JarvisPlugin::tryStartNode()
     }
     m_node.setWorkingDirectory(dir);
     m_node.setProcessChannelMode(QProcess::SeparateChannels);
-    m_node.start(node, {serverJs});
+    m_node.start(node, { serverJs });
     if (m_node.waitForStarted(3000)) {
         m_startedNode = true;
         m_node.waitForFinished(1500); // returns false if still running — that's success
@@ -221,13 +221,13 @@ bool JarvisPlugin::ensureServer()
     return pingServer(&error);
 }
 
-bool JarvisPlugin::http(const QByteArray &method, const QString &path, const QByteArray &body, QByteArray *response, int *status, int timeoutMs)
+bool JarvisPlugin::http(const QByteArray& method, const QString& path, const QByteArray& body, QByteArray* response, int* status, int timeoutMs)
 {
     QUrl url = baseUrl();
     url.setPath(path);
     QNetworkRequest req(url);
     req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
-    QNetworkReply *reply = m_nam.sendCustomRequest(req, method, body);
+    QNetworkReply* reply = m_nam.sendCustomRequest(req, method, body);
     QEventLoop loop;
     QTimer timer;
     timer.setSingleShot(true);
@@ -251,13 +251,14 @@ bool JarvisPlugin::http(const QByteArray &method, const QString &path, const QBy
     return ok && status && *status >= 200 && *status < 300;
 }
 
-QJsonDocument JarvisPlugin::httpJson(const QByteArray &method, const QString &path, const QJsonValue &body, int *status, QString *error)
+QJsonDocument JarvisPlugin::httpJson(const QByteArray& method, const QString& path, const QJsonValue& body, int* status, QString* error)
 {
     QByteArray payload;
     if (!body.isUndefined() && !body.isNull()) {
         if (body.isObject()) {
             payload = QJsonDocument(body.toObject()).toJson(QJsonDocument::Compact);
-        } else if (body.isArray()) {
+        }
+        else if (body.isArray()) {
             payload = QJsonDocument(body.toArray()).toJson(QJsonDocument::Compact);
         }
     }
@@ -305,13 +306,15 @@ void JarvisPlugin::connected()
     QString error;
     if (!pingServer(&error)) {
         sendStatus(error);
-    } else {
+    }
+    else {
         sendStatus();
     }
     sendCommands();
+    sendMode();
 }
 
-void JarvisPlugin::receivePacket(const NetworkPacket &np)
+void JarvisPlugin::receivePacket(const NetworkPacket& np)
 {
     const QString action = np.get<QString>(QStringLiteral("action"));
     if (action == QLatin1String("listCommands") || action == QLatin1String("requestStatus")) {
@@ -319,11 +322,13 @@ void JarvisPlugin::receivePacket(const NetworkPacket &np)
         QString error;
         if (!pingServer(&error)) {
             sendStatus(error);
-        } else {
+        }
+        else {
             sendStatus();
         }
         sendCommands();
         refreshToolCatalog();
+        sendMode();
         return;
     }
     if (action == QLatin1String("createCommand")) {
@@ -374,9 +379,13 @@ void JarvisPlugin::receivePacket(const NetworkPacket &np)
         handleFileAction(np);
         return;
     }
+    if (action == QLatin1String("setMode")) {
+        handleSetMode(np);
+        return;
+    }
 }
 
-void JarvisPlugin::sendStatus(const QString &error)
+void JarvisPlugin::sendStatus(const QString& error)
 {
     QByteArray response;
     int status = 0;
@@ -384,11 +393,11 @@ void JarvisPlugin::sendStatus(const QString &error)
     const QJsonObject obj = QJsonDocument::fromJson(response).object();
     const bool online = obj.value(QStringLiteral("online")).toBool() && error.isEmpty();
     sendPacketType(QStringLiteral("status"),
-                   {
-                       {QStringLiteral("online"), online},
-                       {QStringLiteral("error"), error},
-                       {QStringLiteral("configPath"), obj.value(QStringLiteral("configPath")).toString()},
-                   });
+        {
+            {QStringLiteral("online"), online},
+            {QStringLiteral("error"), error},
+            {QStringLiteral("configPath"), obj.value(QStringLiteral("configPath")).toString()},
+        });
 }
 
 void JarvisPlugin::sendCommands()
@@ -401,13 +410,13 @@ void JarvisPlugin::sendCommands()
         json = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
     }
     sendPacketType(QStringLiteral("commands"),
-                   {
-                       {QStringLiteral("commandsJson"), json},
-                       {QStringLiteral("error"), error},
-                   });
+        {
+            {QStringLiteral("commandsJson"), json},
+            {QStringLiteral("error"), error},
+        });
 }
 
-void JarvisPlugin::sendPacketType(const QString &type, const QVariantMap &extra)
+void JarvisPlugin::sendPacketType(const QString& type, const QVariantMap& extra)
 {
     QVariantMap body = extra;
     body.insert(QStringLiteral("type"), type);
@@ -422,7 +431,7 @@ void JarvisPlugin::refreshToolCatalog()
     const QJsonDocument doc = httpJson("GET", QStringLiteral("/api/tools"), {}, &status, &error);
     QJsonArray catalog = doc.isArray() ? doc.array() : QJsonArray();
     if (catalog.isEmpty()) {
-        for (const QString &name : s_fallbackTools) {
+        for (const QString& name : s_fallbackTools) {
             QJsonObject item;
             item.insert(QStringLiteral("name"), name);
             catalog.append(item);
@@ -484,13 +493,14 @@ QString JarvisPlugin::ensureConversationId()
     if (idRe.match(newId).hasMatch()) {
         m_conversationId = newId;
         config()->set(QStringLiteral("conversationId"), m_conversationId);
-    } else {
+    }
+    else {
         qCWarning(KDECONNECT_PLUGIN_JARVIS) << "Couldn't create/reuse a Jarvis conversation for this device:" << error;
     }
     return m_conversationId;
 }
 
-QString JarvisPlugin::configApiPath(const QString &which) const
+QString JarvisPlugin::configApiPath(const QString& which) const
 {
     // Generic like the web UI: "which" is now the actual config filename
     // (e.g. "ai_config.json"), discovered from GET /api/config/list rather
@@ -514,13 +524,13 @@ void JarvisPlugin::handleGetConfigList()
     QJsonArray files = doc.isObject() ? doc.object().value(QStringLiteral("files")).toArray() : QJsonArray();
     const QString json = QString::fromUtf8(QJsonDocument(files).toJson(QJsonDocument::Compact));
     sendPacketType(QStringLiteral("configList"),
-                   {
-                       {QStringLiteral("filesJson"), json},
-                       {QStringLiteral("error"), error},
-                   });
+        {
+            {QStringLiteral("filesJson"), json},
+            {QStringLiteral("error"), error},
+        });
 }
 
-void JarvisPlugin::handleCreateCommand(const NetworkPacket &np)
+void JarvisPlugin::handleCreateCommand(const NetworkPacket& np)
 {
     QJsonObject spec = QJsonDocument::fromJson(np.get<QString>(QStringLiteral("specJson")).toUtf8()).object();
     QJsonObject body;
@@ -530,14 +540,14 @@ void JarvisPlugin::handleCreateCommand(const NetworkPacket &np)
     QString error;
     httpJson("POST", QStringLiteral("/api/commands"), body, &status, &error);
     if (!error.isEmpty()) {
-        sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), error}});
+        sendPacketType(QStringLiteral("error"), { {QStringLiteral("message"), error} });
         return;
     }
-    sendPacketType(QStringLiteral("ok"), {{QStringLiteral("action"), QStringLiteral("createCommand")}});
+    sendPacketType(QStringLiteral("ok"), { {QStringLiteral("action"), QStringLiteral("createCommand")} });
     sendCommands();
 }
 
-void JarvisPlugin::handleUpdateCommand(const NetworkPacket &np)
+void JarvisPlugin::handleUpdateCommand(const NetworkPacket& np)
 {
     const QString name = np.get<QString>(QStringLiteral("name"));
     QString newName = np.get<QString>(QStringLiteral("newName"));
@@ -552,33 +562,33 @@ void JarvisPlugin::handleUpdateCommand(const NetworkPacket &np)
     QString error;
     httpJson("PUT", QStringLiteral("/api/commands/") + encodePathSegment(name), body, &status, &error);
     if (!error.isEmpty()) {
-        sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), error}});
+        sendPacketType(QStringLiteral("error"), { {QStringLiteral("message"), error} });
         return;
     }
-    sendPacketType(QStringLiteral("ok"), {{QStringLiteral("action"), QStringLiteral("updateCommand")}});
+    sendPacketType(QStringLiteral("ok"), { {QStringLiteral("action"), QStringLiteral("updateCommand")} });
     sendCommands();
 }
 
-void JarvisPlugin::handleDeleteCommand(const NetworkPacket &np)
+void JarvisPlugin::handleDeleteCommand(const NetworkPacket& np)
 {
     const QString name = np.get<QString>(QStringLiteral("name"));
     int status = 0;
     QString error;
     httpJson("DELETE", QStringLiteral("/api/commands/") + encodePathSegment(name), {}, &status, &error);
     if (!error.isEmpty()) {
-        sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), error}});
+        sendPacketType(QStringLiteral("error"), { {QStringLiteral("message"), error} });
         return;
     }
-    sendPacketType(QStringLiteral("ok"), {{QStringLiteral("action"), QStringLiteral("deleteCommand")}});
+    sendPacketType(QStringLiteral("ok"), { {QStringLiteral("action"), QStringLiteral("deleteCommand")} });
     sendCommands();
 }
 
-void JarvisPlugin::handleGetConfig(const NetworkPacket &np)
+void JarvisPlugin::handleGetConfig(const NetworkPacket& np)
 {
     const QString which = np.get<QString>(QStringLiteral("which"));
     const QString path = configApiPath(which);
     if (path.isEmpty()) {
-        sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), QStringLiteral("Unknown config.")}});
+        sendPacketType(QStringLiteral("error"), { {QStringLiteral("message"), QStringLiteral("Unknown config.")} });
         return;
     }
     int status = 0;
@@ -586,15 +596,15 @@ void JarvisPlugin::handleGetConfig(const NetworkPacket &np)
     const QJsonDocument doc = httpJson("GET", path, {}, &status, &error);
     const QJsonObject obj = doc.object();
     sendPacketType(QStringLiteral("config"),
-                   {
-                       {QStringLiteral("which"), which},
-                       {QStringLiteral("path"), obj.value(QStringLiteral("path")).toString()},
-                       {QStringLiteral("text"), obj.value(QStringLiteral("text")).toString()},
-                       {QStringLiteral("error"), error},
-                   });
+        {
+            {QStringLiteral("which"), which},
+            {QStringLiteral("path"), obj.value(QStringLiteral("path")).toString()},
+            {QStringLiteral("text"), obj.value(QStringLiteral("text")).toString()},
+            {QStringLiteral("error"), error},
+        });
 }
 
-void JarvisPlugin::handleSetConfig(const NetworkPacket &np)
+void JarvisPlugin::handleSetConfig(const NetworkPacket& np)
 {
     const QString which = np.get<QString>(QStringLiteral("which"));
     const QString path = configApiPath(which);
@@ -604,24 +614,24 @@ void JarvisPlugin::handleSetConfig(const NetworkPacket &np)
     QString error;
     httpJson("PUT", path, body, &status, &error);
     if (!error.isEmpty()) {
-        sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), error}});
+        sendPacketType(QStringLiteral("error"), { {QStringLiteral("message"), error} });
         return;
     }
-    sendPacketType(QStringLiteral("ok"), {{QStringLiteral("action"), QStringLiteral("setConfig")}, {QStringLiteral("which"), which}});
+    sendPacketType(QStringLiteral("ok"), { {QStringLiteral("action"), QStringLiteral("setConfig")}, {QStringLiteral("which"), which} });
     if (which == QLatin1String("commands.json")) {
         sendCommands();
     }
 }
 
-void JarvisPlugin::handleRun(const NetworkPacket &np)
+void JarvisPlugin::handleRun(const NetworkPacket& np)
 {
     if (!ensureServer()) {
-        sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), QStringLiteral("Jarvis web UI is not running.")}});
+        sendPacketType(QStringLiteral("error"), { {QStringLiteral("message"), QStringLiteral("Jarvis web UI is not running.")} });
         return;
     }
     ensureWs();
     if (m_ws.state() != QAbstractSocket::ConnectedState) {
-        sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), QStringLiteral("Couldn't open Jarvis web socket.")}});
+        sendPacketType(QStringLiteral("error"), { {QStringLiteral("message"), QStringLiteral("Couldn't open Jarvis web socket.")} });
         return;
     }
     m_runId = static_cast<int>(np.get<qlonglong>(QStringLiteral("id")));
@@ -633,15 +643,15 @@ void JarvisPlugin::handleRun(const NetworkPacket &np)
     m_ws.sendTextMessage(QString::fromUtf8(QJsonDocument(msg).toJson(QJsonDocument::Compact)));
 }
 
-void JarvisPlugin::handleAsk(const NetworkPacket &np)
+void JarvisPlugin::handleAsk(const NetworkPacket& np)
 {
     if (!ensureServer()) {
-        sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), QStringLiteral("Jarvis web UI is not running.")}});
+        sendPacketType(QStringLiteral("error"), { {QStringLiteral("message"), QStringLiteral("Jarvis web UI is not running.")} });
         return;
     }
     ensureWs();
     if (m_ws.state() != QAbstractSocket::ConnectedState) {
-        sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), QStringLiteral("Couldn't open Jarvis web socket.")}});
+        sendPacketType(QStringLiteral("error"), { {QStringLiteral("message"), QStringLiteral("Couldn't open Jarvis web socket.")} });
         return;
     }
     m_askId = static_cast<int>(np.get<qlonglong>(QStringLiteral("id")));
@@ -658,7 +668,7 @@ void JarvisPlugin::handleAsk(const NetworkPacket &np)
     m_ws.sendTextMessage(QString::fromUtf8(QJsonDocument(msg).toJson(QJsonDocument::Compact)));
 }
 
-void JarvisPlugin::handleCancel(const QString &kind)
+void JarvisPlugin::handleCancel(const QString& kind)
 {
     if (m_ws.state() != QAbstractSocket::ConnectedState) {
         return;
@@ -671,7 +681,7 @@ void JarvisPlugin::handleCancel(const QString &kind)
     m_ws.sendTextMessage(QString::fromUtf8(QJsonDocument(msg).toJson(QJsonDocument::Compact)));
 }
 
-void JarvisPlugin::handleAskConfirmResponse(const NetworkPacket &np)
+void JarvisPlugin::handleAskConfirmResponse(const NetworkPacket& np)
 {
     // Relay the phone's Yes/No straight to jarvis-web, exactly like the
     // browser's "ask-confirm-response" (see web/public/app.js's
@@ -699,13 +709,61 @@ void JarvisPlugin::handleAiClear()
     }
     httpJson("POST", QStringLiteral("/api/ai/clear"), body, &status, &error);
     if (!error.isEmpty()) {
-        sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), error}});
+        sendPacketType(QStringLiteral("error"), { {QStringLiteral("message"), error} });
         return;
     }
-    sendPacketType(QStringLiteral("ok"), {{QStringLiteral("action"), QStringLiteral("aiClear")}});
+    sendPacketType(QStringLiteral("ok"), { {QStringLiteral("action"), QStringLiteral("aiClear")} });
 }
 
-void JarvisPlugin::handleFileAction(const NetworkPacket &np)
+void JarvisPlugin::sendModePacket(const QJsonObject& obj, const QString& error)
+{
+    sendPacketType(QStringLiteral("mode"),
+        {
+            {QStringLiteral("mode"), obj.value(QStringLiteral("mode")).toString()},
+            {QStringLiteral("optionsJson"), QString::fromUtf8(QJsonDocument(obj.value(QStringLiteral("options")).toArray()).toJson(QJsonDocument::Compact))},
+            {QStringLiteral("error"), error},
+        });
+}
+
+void JarvisPlugin::sendMode()
+{
+    // Pushed proactively alongside sendCommands()/refreshToolCatalog() on
+    // every connect/requestStatus, same pattern as those — so the phone's
+    // capacity switch shows the real current mode the moment it opens,
+    // without a separate round trip.
+    int status = 0;
+    QString error;
+    const QJsonDocument doc = httpJson("GET", QStringLiteral("/api/mode"), {}, &status, &error);
+    sendModePacket(doc.object(), error);
+}
+
+void JarvisPlugin::handleSetMode(const NetworkPacket& np)
+{
+    // The phone's own capacity switch (mirrors the web UI's topbar
+    // #btn-mode-switch). This POSTs the exact same /api/mode the browser
+    // uses, which persists defaults.prompt_mode to ~/.jarvis/ai_config.json
+    // on the desktop — a real, global change affecting every client (every
+    // browser tab, any other paired phone, jarvis-cli itself), not just
+    // this device. There's no phone-local/independent mode concept here,
+    // unlike the web debug dashboard's separate local-only override.
+    const QString mode = np.get<QString>(QStringLiteral("mode"));
+    if (mode.isEmpty()) {
+        sendPacketType(QStringLiteral("error"), { {QStringLiteral("message"), QStringLiteral("Missing mode.")} });
+        return;
+    }
+    QJsonObject body;
+    body.insert(QStringLiteral("mode"), mode);
+    int status = 0;
+    QString error;
+    const QJsonDocument doc = httpJson("POST", QStringLiteral("/api/mode"), body, &status, &error);
+    if (!error.isEmpty()) {
+        sendPacketType(QStringLiteral("error"), { {QStringLiteral("message"), error} });
+        return;
+    }
+    sendModePacket(doc.object(), QString());
+}
+
+void JarvisPlugin::handleFileAction(const NetworkPacket& np)
 {
     // Reveal in Explorer / Open location / Open file, requested from a
     // button on the phone against a path it was offered in
@@ -722,7 +780,7 @@ void JarvisPlugin::handleFileAction(const NetworkPacket &np)
     };
     const QString tool = toolByKind.value(kind);
     if (path.isEmpty() || tool.isEmpty()) {
-        sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), QStringLiteral("Unknown file action.")}});
+        sendPacketType(QStringLiteral("error"), { {QStringLiteral("message"), QStringLiteral("Unknown file action.")} });
         return;
     }
 
@@ -740,29 +798,29 @@ void JarvisPlugin::handleFileAction(const NetworkPacket &np)
     // real success/failure lives inside result, not the HTTP status.
     const QString resultError = doc.object().value(QStringLiteral("result")).toObject().value(QStringLiteral("error")).toString();
     if (!error.isEmpty() || !resultError.isEmpty()) {
-        sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), !resultError.isEmpty() ? resultError : error}});
+        sendPacketType(QStringLiteral("error"), { {QStringLiteral("message"), !resultError.isEmpty() ? resultError : error} });
         return;
     }
     sendPacketType(QStringLiteral("ok"),
-                   {
-                       {QStringLiteral("action"), QStringLiteral("fileAction")},
-                       {QStringLiteral("fileAction"), kind},
-                       {QStringLiteral("path"), path},
-                   });
+        {
+            {QStringLiteral("action"), QStringLiteral("fileAction")},
+            {QStringLiteral("fileAction"), kind},
+            {QStringLiteral("path"), path},
+        });
 }
 
-void JarvisPlugin::collectFileActionCandidates(const QString &line)
+void JarvisPlugin::collectFileActionCandidates(const QString& line)
 {
     static constexpr int kMaxPerTurn = 20; // keep the eventual phone bubble scrollable, not a wall of buttons
     if (m_askFilePaths.size() >= kMaxPerTurn) {
         return;
     }
-    for (const QString &candidate : extractCandidatePaths(line)) {
+    for (const QString& candidate : extractCandidatePaths(line)) {
         if (m_askFilePaths.size() >= kMaxPerTurn) {
             return;
         }
         bool alreadySeen = false;
-        for (const auto &existing : std::as_const(m_askFilePaths)) {
+        for (const auto& existing : std::as_const(m_askFilePaths)) {
             if (existing.first.compare(candidate, Qt::CaseInsensitive) == 0) {
                 alreadySeen = true;
                 break;
@@ -780,7 +838,7 @@ void JarvisPlugin::collectFileActionCandidates(const QString &line)
         if (!info.exists()) {
             continue;
         }
-        m_askFilePaths.append({candidate, info.isDir()});
+        m_askFilePaths.append({ candidate, info.isDir() });
     }
 }
 
@@ -790,21 +848,21 @@ void JarvisPlugin::sendCollectedFileActions()
         return;
     }
     QJsonArray arr;
-    for (const auto &entry : std::as_const(m_askFilePaths)) {
+    for (const auto& entry : std::as_const(m_askFilePaths)) {
         QJsonObject item;
         item.insert(QStringLiteral("path"), entry.first);
         item.insert(QStringLiteral("isFolder"), entry.second);
         arr.append(item);
     }
     sendPacketType(QStringLiteral("askFileActions"),
-                   {
-                       {QStringLiteral("id"), m_askId},
-                       {QStringLiteral("pathsJson"), QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))},
-                   });
+        {
+            {QStringLiteral("id"), m_askId},
+            {QStringLiteral("pathsJson"), QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))},
+        });
     m_askFilePaths.clear();
 }
 
-void JarvisPlugin::fetchScreenshot(const QString &filename)
+void JarvisPlugin::fetchScreenshot(const QString& filename)
 {
     static const QRegularExpression valid(QStringLiteral("^ss_[A-Za-z0-9_.-]+\\.png$"));
     if (!valid.match(filename).hasMatch()) {
@@ -816,13 +874,13 @@ void JarvisPlugin::fetchScreenshot(const QString &filename)
         return;
     }
     sendPacketType(QStringLiteral("screenshot"),
-                   {
-                       {QStringLiteral("filename"), filename},
-                       {QStringLiteral("data"), QString::fromLatin1(response.toBase64())},
-                   });
+        {
+            {QStringLiteral("filename"), filename},
+            {QStringLiteral("data"), QString::fromLatin1(response.toBase64())},
+        });
 }
 
-void JarvisPlugin::onWsTextMessage(const QString &message)
+void JarvisPlugin::onWsTextMessage(const QString& message)
 {
     const QJsonObject obj = QJsonDocument::fromJson(message.toUtf8()).object();
     const QString type = obj.value(QStringLiteral("type")).toString();
@@ -832,35 +890,35 @@ void JarvisPlugin::onWsTextMessage(const QString &message)
     }
     if (type == QLatin1String("start")) {
         sendPacketType(QStringLiteral("runStart"),
-                       {
-                           {QStringLiteral("id"), m_runId},
-                           {QStringLiteral("cmdline"), obj.value(QStringLiteral("cmdline")).toString()},
-                       });
+            {
+                {QStringLiteral("id"), m_runId},
+                {QStringLiteral("cmdline"), obj.value(QStringLiteral("cmdline")).toString()},
+            });
         return;
     }
     if (type == QLatin1String("stdout")) {
-        sendPacketType(QStringLiteral("runStdout"), {{QStringLiteral("id"), m_runId}, {QStringLiteral("line"), obj.value(QStringLiteral("line")).toString()}});
+        sendPacketType(QStringLiteral("runStdout"), { {QStringLiteral("id"), m_runId}, {QStringLiteral("line"), obj.value(QStringLiteral("line")).toString()} });
         return;
     }
     if (type == QLatin1String("stderr")) {
-        sendPacketType(QStringLiteral("runStderr"), {{QStringLiteral("id"), m_runId}, {QStringLiteral("line"), obj.value(QStringLiteral("line")).toString()}});
+        sendPacketType(QStringLiteral("runStderr"), { {QStringLiteral("id"), m_runId}, {QStringLiteral("line"), obj.value(QStringLiteral("line")).toString()} });
         return;
     }
     if (type == QLatin1String("exit")) {
-        sendPacketType(QStringLiteral("runExit"), {{QStringLiteral("id"), m_runId}, {QStringLiteral("code"), obj.value(QStringLiteral("code")).toInt()}});
+        sendPacketType(QStringLiteral("runExit"), { {QStringLiteral("id"), m_runId}, {QStringLiteral("code"), obj.value(QStringLiteral("code")).toInt()} });
         return;
     }
     if (type == QLatin1String("error")) {
-        sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), obj.value(QStringLiteral("message")).toString()}});
+        sendPacketType(QStringLiteral("error"), { {QStringLiteral("message"), obj.value(QStringLiteral("message")).toString()} });
         return;
     }
     if (type == QLatin1String("ask-start")) {
-        sendPacketType(QStringLiteral("askStart"), {{QStringLiteral("id"), m_askId}});
+        sendPacketType(QStringLiteral("askStart"), { {QStringLiteral("id"), m_askId} });
         return;
     }
     if (type == QLatin1String("ask-stdout")) {
         const QString line = obj.value(QStringLiteral("line")).toString();
-        sendPacketType(QStringLiteral("askStdout"), {{QStringLiteral("id"), m_askId}, {QStringLiteral("line"), line}});
+        sendPacketType(QStringLiteral("askStdout"), { {QStringLiteral("id"), m_askId}, {QStringLiteral("line"), line} });
         collectFileActionCandidates(line);
         return;
     }
@@ -872,15 +930,15 @@ void JarvisPlugin::onWsTextMessage(const QString &message)
                 fetchScreenshot(parts.at(2).trimmed());
             }
         }
-        sendPacketType(QStringLiteral("askStderr"), {{QStringLiteral("id"), m_askId}, {QStringLiteral("line"), line}});
+        sendPacketType(QStringLiteral("askStderr"), { {QStringLiteral("id"), m_askId}, {QStringLiteral("line"), line} });
         return;
     }
     if (type == QLatin1String("ask-exit") || type == QLatin1String("ask-error")) {
         if (type == QLatin1String("ask-error")) {
-            sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), obj.value(QStringLiteral("message")).toString()}});
+            sendPacketType(QStringLiteral("error"), { {QStringLiteral("message"), obj.value(QStringLiteral("message")).toString()} });
         }
         sendCollectedFileActions();
-        sendPacketType(QStringLiteral("askExit"), {{QStringLiteral("id"), m_askId}, {QStringLiteral("code"), obj.value(QStringLiteral("code")).toInt()}});
+        sendPacketType(QStringLiteral("askExit"), { {QStringLiteral("id"), m_askId}, {QStringLiteral("code"), obj.value(QStringLiteral("code")).toInt()} });
     }
     if (type == QLatin1String("ask-confirm-request")) {
         // A tool flagged confirm_required (see jarvis-cli/jarvis/tool_safety.py)

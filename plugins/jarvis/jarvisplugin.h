@@ -8,6 +8,7 @@
 
 #include <QByteArray>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QJsonValue>
 #include <QNetworkAccessManager>
 #include <QPair>
@@ -60,6 +61,16 @@ private:
     void handleCancel(const QString &kind = QString());
     void handleAiClear();
     void handleAskConfirmResponse(const NetworkPacket &np);
+    // Phone's own capacity-mode switch (mirrors the web UI's topbar
+    // #btn-mode-switch). Unlike the debug dashboard's local-only override
+    // (jarvis-cli tool-run/tool-preview's optional `mode` arg), this is a
+    // real, global change: sendMode()/handleSetMode() both talk to the
+    // exact same GET/POST /api/mode the browser uses, so a mode set from
+    // the phone persists to ~/.jarvis/ai_config.json and affects every
+    // client, not just this device.
+    void sendMode();
+    void sendModePacket(const QJsonObject &obj, const QString &error);
+    void handleSetMode(const NetworkPacket &np);
     void fetchScreenshot(const QString &filename);
     QString ensureConversationId();
     // Reveal in Explorer / Open location / Open file for a path the phone
