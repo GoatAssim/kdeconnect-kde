@@ -380,6 +380,10 @@ void JarvisPlugin::receivePacket(const NetworkPacket &np)
         handleFileAction(np);
         return;
     }
+    if (action == QLatin1String("downloadFile")) {
+        handleDownloadFile(np);
+        return;
+    }
     if (action == QLatin1String("setMode")) {
         handleSetMode(np);
         return;
@@ -929,11 +933,13 @@ void JarvisPlugin::fetchOrganizeJson(const QString &path)
 void JarvisPlugin::relayPresentFile(const QString &mediaLine)
 {
     // "JARVIS_MEDIA\tpresent_file\t<job_id>\t<filename>\t<name>\t<type>\t<size>\t<path>"
-    // (see present_tools.py's _emit_media). job_id/filename are for the web
-    // UI's own /api/downloads/:jobId/:filename route; this plugin's server
-    // runs on this same PC, so there's nothing to fetch and no Download
-    // button to offer here — just name/type/size/path, with Open/Reveal
-    // proxied through handleFileAction exactly like askFileActions.
+    // (see present_tools.py's _emit_media). job_id/filename are the same
+    // pair the web UI's /api/downloads/:jobId/:filename route uses; forward
+    // them along so the phone can ask for the bytes via downloadFile below
+    // instead of hitting that (127.0.0.1-only) HTTP route itself. They come
+    // back as "-" when present_tools.py skipped the download copy (over
+    // DOWNLOAD_SIZE_CAP, or the copy failed) — in that case just omit them,
+    // same as the web UI showing the card without a Download button.
     const QStringList parts = mediaLine.split(QLatin1Char('\t'));
     if (parts.size() < 8) {
         return;
@@ -944,14 +950,67 @@ void JarvisPlugin::relayPresentFile(const QString &mediaLine)
     }
     bool sizeOk = false;
     const qlonglong size = parts.at(6).toLongLong(&sizeOk);
-    sendPacketType(QStringLiteral("presentFile"),
-                   {
-                       {QStringLiteral("id"), m_askId},
-                       {QStringLiteral("name"), parts.at(4)},
-                       {QStringLiteral("fileType"), parts.at(5)},
-                       {QStringLiteral("sizeBytes"), sizeOk ? size : -1},
-                       {QStringLiteral("path"), path},
-                   });
+    QVariantMap extra{
+        {QStringLiteral("id"), m_askId},
+        {QStringLiteral("name"), parts.at(4)},
+        {QStringLiteral("fileType"), parts.at(5)},
+        {QStringLiteral("sizeBytes"), sizeOk ? size : -1},
+        {QStringLiteral("path"), path},
+    };
+    const QString jobId = parts.at(2).trimmed();
+    const QString downloadFilename = parts.at(3).trimmed();
+    if (jobId != QLatin1String("-") && downloadFilename != QLatin1String("-") && !jobId.isEmpty() && !downloadFilename.isEmpty()) {
+        extra.insert(QStringLiteral("downloadJobId"), jobId);
+        extra.insert(QStringLiteral("downloadFilename"), downloadFilename);
+    }
+    sendPacketType(QStringLiteral("presentFile"), extra);
+}
+
+void JarvisPlugin::handleDownloadFile(const NetworkPacket &np)
+{
+    // Mirrors web/server.js's GET /api/downloads/:jobId/:filename exactly
+    // (same regex, same basename-only + no-traversal check) since that route
+    // only binds to 127.0.0.1 and the phone can't reach it directly — this
+    // plugin reads the file itself and relays the bytes over KDE Connect's
+    // own payload transfer instead, same pattern as shareplugin.cpp's
+    // shareUrl().
+    static const QRegularExpression jobIdRe(QStringLiteral("^dl_[A-Za-z0-9_-]+$"));
+    const QString jobId = QFileInfo(np.get<QString>(QStringLiteral("jobId"))).fileName();
+    const QString filename = QFileInfo(np.get<QString>(QStringLiteral("filename"))).fileName();
+    if (!jobIdRe.match(jobId).hasMatch() || filename.isEmpty()) {
+        sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), QStringLiteral("Invalid download reference.")}});
+        return;
+    }
+
+    const QString jobDir = QDir::home().filePath(QStringLiteral(".jarvis/downloads/") + jobId);
+    const QString filePath = QDir(jobDir).filePath(filename);
+    // QDir::filePath() alone won't strip a sneaky ".." out of filename since
+    // we already reduced it to a bare basename above, but double-check the
+    // resolved parent matches jobDir exactly, just like server.js's
+    // path.dirname(filePath) !== jobDir guard.
+    if (QFileInfo(filePath).absolutePath() != QFileInfo(jobDir).absoluteFilePath()) {
+        sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), QStringLiteral("Invalid download reference.")}});
+        return;
+    }
+
+    QSharedPointer<QFile> ioFile(new QFile(filePath));
+    if (!ioFile->exists()) {
+        sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), QStringLiteral("Download not found.")}});
+        return;
+    }
+    if (!ioFile->open(QIODevice::ReadOnly)) {
+        sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), QStringLiteral("Could not open file for download.")}});
+        return;
+    }
+
+    QVariantMap body{
+        {QStringLiteral("type"), QStringLiteral("downloadFile")},
+        {QStringLiteral("jobId"), jobId},
+        {QStringLiteral("filename"), filename},
+    };
+    NetworkPacket packet(PACKET_TYPE_JARVIS, body);
+    packet.setPayload(ioFile, ioFile->size());
+    sendPacket(packet);
 }
 
 void JarvisPlugin::onWsTextMessage(const QString &message)

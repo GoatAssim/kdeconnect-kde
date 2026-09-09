@@ -93,6 +93,14 @@ private:
     // phone as its own card; Open/Reveal reuse handleFileAction exactly
     // like sendCollectedFileActions' candidates do.
     void relayPresentFile(const QString &mediaLine);
+    // Phone tapping "Download" on a presentFile card: {action:"downloadFile",
+    // jobId, filename}. jobId/filename come straight back from what
+    // relayPresentFile sent, so they're re-validated here exactly like
+    // web/server.js's own /api/downloads/:jobId/:filename route validates
+    // them (same regex, same basename-only + no-traversal check) before the
+    // file is read and relayed to the phone as its own payload-bearing
+    // packet — see shareplugin.cpp's shareUrl() for the payload pattern.
+    void handleDownloadFile(const NetworkPacket &np);
     QString ensureConversationId();
     // Reveal in Explorer / Open location / Open file for a path the phone
     // spotted in Jarvis's own reply (see collectFileActionCandidates) —
