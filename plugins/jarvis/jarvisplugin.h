@@ -8,6 +8,7 @@
 
 #include <QByteArray>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QJsonValue>
 #include <QNetworkAccessManager>
 #include <QPair>
@@ -60,7 +61,25 @@ private:
     void handleCancel(const QString &kind = QString());
     void handleAiClear();
     void handleAskConfirmResponse(const NetworkPacket &np);
+    // Phone's own capacity-mode switch (mirrors the web UI's topbar
+    // #btn-mode-switch). Unlike the debug dashboard's local-only override
+    // (jarvis-cli tool-run/tool-preview's optional `mode` arg), this is a
+    // real, global change: sendMode()/handleSetMode() both talk to the
+    // exact same GET/POST /api/mode the browser uses, so a mode set from
+    // the phone persists to ~/.jarvis/ai_config.json and affects every
+    // client, not just this device.
+    void sendMode();
+    void sendModePacket(const QJsonObject &obj, const QString &error);
+    void handleSetMode(const NetworkPacket &np);
     void fetchScreenshot(const QString &filename);
+    // Mirrors fetchScreenshot: the organize_json AI tool (jarvis-cli's
+    // json_tools.py) emits a JARVIS_MEDIA organize_json line with just a
+    // resolved path, never the file's contents. This re-validates/parses it
+    // via the same /api/json/organize POST the web UI's typed
+    // "organize-json <path>" shortcut uses (server.js), then forwards the
+    // parsed text to the phone as its own packet so it can render the same
+    // Organized(Fancy)/Raw JSON, view-only toggle the browser shows.
+    void fetchOrganizeJson(const QString &path);
     QString ensureConversationId();
     // Reveal in Explorer / Open location / Open file for a path the phone
     // spotted in Jarvis's own reply (see collectFileActionCandidates) —

@@ -1,22 +1,40 @@
-# SPDX-FileCopyrightText: None
-# SPDX-License-Identifier: CC0-1.0
+# SPDX-FileCopyrightText: 2023 Nicolas Fella <nicolas.fella@gmx.de>
+# SPDX-FileCopyrightText: 2023 Simon Redman <simon@ergotech.com>
+# SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
+#
+# Test this pipeline locally by:
+# - Set up Docker on your machine, if not already set up
+# - Set up gitlab-runner, as described here: https://stackoverflow.com/a/52724374
+# - Run `gitlab-runner exec docker --docker-privileged buildLintAndTest`
 
-# Include scripts from https://invent.kde.org/sysadmin/ci-utilities
-# which run on Docker images from https://invent.kde.org/sysadmin/ci-images
-# The macOS build is only signed and notarized for the stable branch builds, as specified in:
-# https://invent.kde.org/sysadmin/ci-utilities/-/blob/master/signing/macappsigner-projects.yaml
-# and https://invent.kde.org/sysadmin/ci-utilities/-/blob/master/signing/macappnotarizer-projects.yaml
-include:
-  - project: sysadmin/ci-utilities
-    file:
-      - /gitlab-templates/linux-qt6.yml
-      - /gitlab-templates/linux-qt6-next.yml
-      - /gitlab-templates/freebsd-qt6.yml
-      - /gitlab-templates/windows-qt6.yml
-      - /gitlab-templates/clang-format.yml
-      - /gitlab-templates/craft-windows-x86-64-qt6.yml
-      - /gitlab-templates/craft-windows-appx-qt6.yml
-      - /gitlab-templates/craft-macos-x86-64-qt6.yml
-      - /gitlab-templates/craft-macos-arm64-qt6.yml
-      - /gitlab-templates/xml-lint.yml
-      - /gitlab-templates/yaml-lint.yml
+variables:
+  # Version from https://developer.android.com/studio#command-line-tools-only
+  ANDROID_SDK_TOOLS:   "15859902"
+
+default:
+  tags:
+    - Linux
+  image: ubuntu:26.04
+  before_script:
+    # Install Java and Android SDK
+    - apt-get --quiet update --yes
+    - apt-get --quiet install --yes wget tar unzip openjdk-21-jdk-headless
+    - wget --no-verbose -O android-sdk.zip "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_SDK_TOOLS}_latest.zip"
+    # Create ANDROID_HOME structure
+    - mkdir -p sdk/cmdline-tools
+    - unzip android-sdk.zip
+    - mv cmdline-tools sdk/cmdline-tools/latest
+    - export ANDROID_HOME=$PWD/sdk
+    - export PATH=$PATH:$PWD/sdk/cmdline-tools/latest/bin
+    - (yes || true) | sdkmanager --licenses
+
+stages:
+  - buildLintAndTest
+
+buildLintAndTest:
+  stage: buildLintAndTest
+  script:
+    - ./gradlew --no-daemon -Pci --console=plain assembleDebug lintDebug testDebugUnitTest
+  artifacts:
+    paths:
+    - build/outputs/

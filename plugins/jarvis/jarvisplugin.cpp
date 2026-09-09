@@ -309,6 +309,7 @@ void JarvisPlugin::connected()
         sendStatus();
     }
     sendCommands();
+    sendMode();
 }
 
 void JarvisPlugin::receivePacket(const NetworkPacket &np)
@@ -324,6 +325,7 @@ void JarvisPlugin::receivePacket(const NetworkPacket &np)
         }
         sendCommands();
         refreshToolCatalog();
+        sendMode();
         return;
     }
     if (action == QLatin1String("createCommand")) {
@@ -372,6 +374,10 @@ void JarvisPlugin::receivePacket(const NetworkPacket &np)
     }
     if (action == QLatin1String("fileAction")) {
         handleFileAction(np);
+        return;
+    }
+    if (action == QLatin1String("setMode")) {
+        handleSetMode(np);
         return;
     }
 }
@@ -705,6 +711,55 @@ void JarvisPlugin::handleAiClear()
     sendPacketType(QStringLiteral("ok"), {{QStringLiteral("action"), QStringLiteral("aiClear")}});
 }
 
+void JarvisPlugin::sendModePacket(const QJsonObject &obj, const QString &error)
+{
+    sendPacketType(
+        QStringLiteral("mode"),
+        {
+            {QStringLiteral("mode"), obj.value(QStringLiteral("mode")).toString()},
+            {QStringLiteral("optionsJson"), QString::fromUtf8(QJsonDocument(obj.value(QStringLiteral("options")).toArray()).toJson(QJsonDocument::Compact))},
+            {QStringLiteral("error"), error},
+        });
+}
+
+void JarvisPlugin::sendMode()
+{
+    // Pushed proactively alongside sendCommands()/refreshToolCatalog() on
+    // every connect/requestStatus, same pattern as those — so the phone's
+    // capacity switch shows the real current mode the moment it opens,
+    // without a separate round trip.
+    int status = 0;
+    QString error;
+    const QJsonDocument doc = httpJson("GET", QStringLiteral("/api/mode"), {}, &status, &error);
+    sendModePacket(doc.object(), error);
+}
+
+void JarvisPlugin::handleSetMode(const NetworkPacket &np)
+{
+    // The phone's own capacity switch (mirrors the web UI's topbar
+    // #btn-mode-switch). This POSTs the exact same /api/mode the browser
+    // uses, which persists defaults.prompt_mode to ~/.jarvis/ai_config.json
+    // on the desktop — a real, global change affecting every client (every
+    // browser tab, any other paired phone, jarvis-cli itself), not just
+    // this device. There's no phone-local/independent mode concept here,
+    // unlike the web debug dashboard's separate local-only override.
+    const QString mode = np.get<QString>(QStringLiteral("mode"));
+    if (mode.isEmpty()) {
+        sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), QStringLiteral("Missing mode.")}});
+        return;
+    }
+    QJsonObject body;
+    body.insert(QStringLiteral("mode"), mode);
+    int status = 0;
+    QString error;
+    const QJsonDocument doc = httpJson("POST", QStringLiteral("/api/mode"), body, &status, &error);
+    if (!error.isEmpty()) {
+        sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), error}});
+        return;
+    }
+    sendModePacket(doc.object(), QString());
+}
+
 void JarvisPlugin::handleFileAction(const NetworkPacket &np)
 {
     // Reveal in Explorer / Open location / Open file, requested from a
@@ -822,6 +877,34 @@ void JarvisPlugin::fetchScreenshot(const QString &filename)
                    });
 }
 
+void JarvisPlugin::fetchOrganizeJson(const QString &path)
+{
+    if (path.trimmed().isEmpty()) {
+        return;
+    }
+    QJsonObject body;
+    body.insert(QStringLiteral("path"), path);
+    int status = 0;
+    QString error;
+    const QJsonDocument doc = httpJson("POST", QStringLiteral("/api/json/organize"), body, &status, &error);
+    const QJsonObject obj = doc.object();
+    // On failure /api/json/organize still returns a JSON body with a
+    // human-readable "error" (exact bad file/line/column) — prefer that
+    // over the generic transport-level `error` from httpJson when present,
+    // same as handleGetConfig does implicitly by relaying obj's fields.
+    QString message = error;
+    if (!obj.value(QStringLiteral("ok")).toBool(true) && obj.contains(QStringLiteral("error"))) {
+        message = obj.value(QStringLiteral("error")).toString();
+    }
+    sendPacketType(QStringLiteral("organizeJson"),
+                   {
+                       {QStringLiteral("id"), m_askId},
+                       {QStringLiteral("path"), obj.value(QStringLiteral("path")).toString(path)},
+                       {QStringLiteral("text"), obj.value(QStringLiteral("text")).toString()},
+                       {QStringLiteral("error"), message},
+                   });
+}
+
 void JarvisPlugin::onWsTextMessage(const QString &message)
 {
     const QJsonObject obj = QJsonDocument::fromJson(message.toUtf8()).object();
@@ -870,6 +953,8 @@ void JarvisPlugin::onWsTextMessage(const QString &message)
             const QStringList parts = line.split(QLatin1Char('\t'));
             if (parts.size() >= 3 && parts.at(1) == QLatin1String("screenshot")) {
                 fetchScreenshot(parts.at(2).trimmed());
+            } else if (parts.size() >= 3 && parts.at(1) == QLatin1String("organize_json")) {
+                fetchOrganizeJson(parts.at(2).trimmed());
             }
         }
         sendPacketType(QStringLiteral("askStderr"), {{QStringLiteral("id"), m_askId}, {QStringLiteral("line"), line}});
@@ -909,5 +994,5 @@ void JarvisPlugin::onWsError()
     qCWarning(KDECONNECT_PLUGIN_JARVIS) << "Jarvis websocket error" << m_ws.errorString();
 }
 
-#include "moc_jarvisplugin.cpp"
 #include "jarvisplugin.moc"
+#include "moc_jarvisplugin.cpp"
