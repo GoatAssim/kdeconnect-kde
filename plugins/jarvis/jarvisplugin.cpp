@@ -372,6 +372,10 @@ void JarvisPlugin::receivePacket(const NetworkPacket &np)
         handleAskConfirmResponse(np);
         return;
     }
+    if (action == QLatin1String("runConfirmResponse")) {
+        handleRunConfirmResponse(np);
+        return;
+    }
     if (action == QLatin1String("fileAction")) {
         handleFileAction(np);
         return;
@@ -694,6 +698,23 @@ void JarvisPlugin::handleAskConfirmResponse(const NetworkPacket &np)
     m_ws.sendTextMessage(QString::fromUtf8(QJsonDocument(msg).toJson(QJsonDocument::Compact)));
 }
 
+void JarvisPlugin::handleRunConfirmResponse(const NetworkPacket &np)
+{
+    // Same relay as handleAskConfirmResponse, but for a directly-run saved
+    // command's own confirm_required/ai_review flags (see cli.py's
+    // confirm_direct_command) — server.js only forwards the answer to the
+    // blocked child if ws.activeKind is "run", so this must go out as
+    // "confirm-response", never "ask-confirm-response", or it's silently
+    // dropped.
+    if (m_ws.state() != QAbstractSocket::ConnectedState) {
+        return;
+    }
+    QJsonObject msg;
+    msg.insert(QStringLiteral("type"), QStringLiteral("confirm-response"));
+    msg.insert(QStringLiteral("approved"), np.get<bool>(QStringLiteral("approved")));
+    m_ws.sendTextMessage(QString::fromUtf8(QJsonDocument(msg).toJson(QJsonDocument::Compact)));
+}
+
 void JarvisPlugin::handleAiClear()
 {
     int status = 0;
@@ -905,6 +926,34 @@ void JarvisPlugin::fetchOrganizeJson(const QString &path)
                    });
 }
 
+void JarvisPlugin::relayPresentFile(const QString &mediaLine)
+{
+    // "JARVIS_MEDIA\tpresent_file\t<job_id>\t<filename>\t<name>\t<type>\t<size>\t<path>"
+    // (see present_tools.py's _emit_media). job_id/filename are for the web
+    // UI's own /api/downloads/:jobId/:filename route; this plugin's server
+    // runs on this same PC, so there's nothing to fetch and no Download
+    // button to offer here — just name/type/size/path, with Open/Reveal
+    // proxied through handleFileAction exactly like askFileActions.
+    const QStringList parts = mediaLine.split(QLatin1Char('\t'));
+    if (parts.size() < 8) {
+        return;
+    }
+    const QString path = parts.at(7).trimmed();
+    if (path.isEmpty()) {
+        return;
+    }
+    bool sizeOk = false;
+    const qlonglong size = parts.at(6).toLongLong(&sizeOk);
+    sendPacketType(QStringLiteral("presentFile"),
+                   {
+                       {QStringLiteral("id"), m_askId},
+                       {QStringLiteral("name"), parts.at(4)},
+                       {QStringLiteral("fileType"), parts.at(5)},
+                       {QStringLiteral("sizeBytes"), sizeOk ? size : -1},
+                       {QStringLiteral("path"), path},
+                   });
+}
+
 void JarvisPlugin::onWsTextMessage(const QString &message)
 {
     const QJsonObject obj = QJsonDocument::fromJson(message.toUtf8()).object();
@@ -937,6 +986,38 @@ void JarvisPlugin::onWsTextMessage(const QString &message)
         sendPacketType(QStringLiteral("error"), {{QStringLiteral("message"), obj.value(QStringLiteral("message")).toString()}});
         return;
     }
+    if (type == QLatin1String("confirm-request")) {
+        // A directly-run saved command flagged confirm_required/ai_review
+        // (see tool_safety.json / commands_config.py) has paused the "run"
+        // child on stdin. Same shape as ask-confirm-request below, just
+        // keyed to m_runId and sent as its own packet type so the phone
+        // can tell a normal-command confirmation apart from an AI-ask one.
+        const QJsonObject arguments = obj.value(QStringLiteral("arguments")).toObject();
+        const QJsonObject riskNote = obj.value(QStringLiteral("risk_note")).toObject();
+        QVariantMap extra{
+            {QStringLiteral("id"), m_runId},
+            {QStringLiteral("tool"), obj.value(QStringLiteral("tool")).toString()},
+            {QStringLiteral("argumentsJson"), QString::fromUtf8(QJsonDocument(arguments).toJson(QJsonDocument::Compact))},
+        };
+        if (!riskNote.isEmpty()) {
+            extra.insert(QStringLiteral("riskProvider"), riskNote.value(QStringLiteral("provider")).toString());
+            extra.insert(QStringLiteral("riskNote"), riskNote.value(QStringLiteral("note")).toString());
+            // Only present for create_command/update_command reviews (see
+            // cli.py's confirm_tool_call docstring) or a direct run of a
+            // flagged saved command — absent otherwise, so the phone should
+            // only render these rows when they're actually there.
+            if (riskNote.contains(QStringLiteral("command_flags"))) {
+                const QJsonObject flags = riskNote.value(QStringLiteral("command_flags")).toObject();
+                extra.insert(QStringLiteral("flagConfirmRequired"), flags.value(QStringLiteral("confirm_required")).toBool());
+                extra.insert(QStringLiteral("flagAiReview"), flags.value(QStringLiteral("ai_review")).toBool());
+            }
+            if (riskNote.contains(QStringLiteral("command_run"))) {
+                extra.insert(QStringLiteral("commandRun"), riskNote.value(QStringLiteral("command_run")).toVariant());
+            }
+        }
+        sendPacketType(QStringLiteral("runConfirmRequest"), extra);
+        return;
+    }
     if (type == QLatin1String("ask-start")) {
         sendPacketType(QStringLiteral("askStart"), {{QStringLiteral("id"), m_askId}});
         return;
@@ -955,6 +1036,8 @@ void JarvisPlugin::onWsTextMessage(const QString &message)
                 fetchScreenshot(parts.at(2).trimmed());
             } else if (parts.size() >= 3 && parts.at(1) == QLatin1String("organize_json")) {
                 fetchOrganizeJson(parts.at(2).trimmed());
+            } else if (parts.at(1) == QLatin1String("present_file")) {
+                relayPresentFile(line);
             }
         }
         sendPacketType(QStringLiteral("askStderr"), {{QStringLiteral("id"), m_askId}, {QStringLiteral("line"), line}});
@@ -983,6 +1066,17 @@ void JarvisPlugin::onWsTextMessage(const QString &message)
         if (!riskNote.isEmpty()) {
             extra.insert(QStringLiteral("riskProvider"), riskNote.value(QStringLiteral("provider")).toString());
             extra.insert(QStringLiteral("riskNote"), riskNote.value(QStringLiteral("note")).toString());
+            // create_command/update_command calls carry the safety flags the
+            // new command would be saved with (see cli.py's confirm_tool_call
+            // docstring) — absent for every other tool.
+            if (riskNote.contains(QStringLiteral("command_flags"))) {
+                const QJsonObject flags = riskNote.value(QStringLiteral("command_flags")).toObject();
+                extra.insert(QStringLiteral("flagConfirmRequired"), flags.value(QStringLiteral("confirm_required")).toBool());
+                extra.insert(QStringLiteral("flagAiReview"), flags.value(QStringLiteral("ai_review")).toBool());
+            }
+            if (riskNote.contains(QStringLiteral("command_run"))) {
+                extra.insert(QStringLiteral("commandRun"), riskNote.value(QStringLiteral("command_run")).toVariant());
+            }
         }
         sendPacketType(QStringLiteral("askConfirmRequest"), extra);
         return;

@@ -61,6 +61,12 @@ private:
     void handleCancel(const QString &kind = QString());
     void handleAiClear();
     void handleAskConfirmResponse(const NetworkPacket &np);
+    // Same handshake as handleAskConfirmResponse, for a confirm_required/
+    // ai_review-flagged saved command run directly (not via the AI ask
+    // loop) — see cli.py's confirm_direct_command. server.js tells the two
+    // apart as "confirm-response" (run) vs "ask-confirm-response" (ask),
+    // over the same blocking-stdin protocol either way.
+    void handleRunConfirmResponse(const NetworkPacket &np);
     // Phone's own capacity-mode switch (mirrors the web UI's topbar
     // #btn-mode-switch). Unlike the debug dashboard's local-only override
     // (jarvis-cli tool-run/tool-preview's optional `mode` arg), this is a
@@ -80,6 +86,13 @@ private:
     // parsed text to the phone as its own packet so it can render the same
     // Organized(Fancy)/Raw JSON, view-only toggle the browser shows.
     void fetchOrganizeJson(const QString &path);
+    // Mirrors fetchScreenshot/fetchOrganizeJson for the present_file AI tool
+    // (jarvis-cli's present_tools.py). Unlike those two, the file already
+    // lives on this same PC (the plugin's own web server runs locally), so
+    // there's nothing to fetch — just relay the name/type/size/path to the
+    // phone as its own card; Open/Reveal reuse handleFileAction exactly
+    // like sendCollectedFileActions' candidates do.
+    void relayPresentFile(const QString &mediaLine);
     QString ensureConversationId();
     // Reveal in Explorer / Open location / Open file for a path the phone
     // spotted in Jarvis's own reply (see collectFileActionCandidates) —
